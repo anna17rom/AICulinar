@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Manager</title>
+    <style>
+        body {
+            display: flex;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        #sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            padding: 20px;
+            height: 100vh;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        #content {
+            flex-grow: 1;
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .hidden {
+            display: none;
+        }
+        #profileButton {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #profileButton:hover {
+            background-color: #c0392b;
+        }
+        #menuButton {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        #menuButton:hover {
+            background-color: #2980b9;
+        }
+        #menuOptions button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #34495e;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        #menuOptions button:hover {
+            background-color: #2c3e50;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        #recipeList {
+            list-style-type: none;
+            padding: 0;
+        }
+        #recipeList li {
+            cursor: pointer;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+        #recipeList li:hover {
+            background-color: #ecf0f1;
+        }
+        #recipeDetails {
+            margin-top: 30px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        form {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button[type="submit"] {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button[type="submit"]:hover {
+            background-color: #27ae60;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <button id="profileButton">My Profile</button>
+        <button id="menuButton">Menu</button>
+        <div id="menuOptions" class="hidden">
+            <button id="addRecipeButton">Add Recipe</button>
+            <button id="viewRecipesButton">View Recipes</button>
+            <button id="shoppingListButton">Shopping List</button>
+            <button id="calorieCalculatorButton">Calorie Calculator</button>
+            <button id="foodTinderButton">FoodTinder</button>
+            <button id="aiCulinarButton">AI-Culinar</button>
+        </div>
+    </div>
+    
+    <div id="content">
+        <h1>Recipe Manager</h1>
+        
+        <div id="addRecipeSection" class="hidden">
+            <h2>Add Recipe</h2>
+            <form id="recipeForm">
+                <label for="name">Name:</label>
+                <input type="text" id="name" required><br>
+                <label for="ingredients">Ingredients:</label>
+                <textarea id="ingredients" rows="4" required></textarea><br>
+                <label for="instructions">Instructions:</label>
+                <textarea id="instructions" rows="6" required></textarea><br>
+                <button type="submit">Add Recipe</button>
+            </form>
+        </div>
+
+        <div id="viewRecipesSection" class="hidden">
+            <h2>Recipes</h2>
+            <ul id="recipeList"></ul>
+            <div id="recipeDetails" class="hidden">
+                <h3 id="recipeName"></h3>
+                <h4>Ingredients:</h4>
+                <p id="recipeIngredients"></p>
+                <h4>Instructions:</h4>
+                <p id="recipeInstructions"></p>
+            </div>
+        </div>
+
+        <div id="shoppingListSection" class="hidden">
+            <h2>Shopping List</h2>
+            <p>Shopping list functionality coming soon!</p>
+        </div>
+
+        <div id="calorieCalculatorSection" class="hidden">
+            <h2>Calorie Calculator</h2>
+            <p>Calorie calculator functionality coming soon!</p>
+        </div>
+
+        <div id="foodTinderSection" class="hidden">
+            <h2>FoodTinder</h2>
+            <p>FoodTinder functionality coming soon!</p>
+        </div>
+
+        <div id="aiCulinarSection" class="hidden">
+            <h2>AI-Culinar</h2>
+            <p>AI-Culinar functionality coming soon!</p>
+        </div>
+
+        <div id="profileSection" class="hidden">
+            <h2>My Profile</h2>
+            <p>Profile functionality coming soon!</p>
+        </div>
+    </div>
+
+    <script>
+        const menuButton = document.getElementById('menuButton');
+        const menuOptions = document.getElementById('menuOptions');
+        const addRecipeButton = document.getElementById('addRecipeButton');
+        const viewRecipesButton = document.getElementById('viewRecipesButton');
+        const shoppingListButton = document.getElementById('shoppingListButton');
+        const calorieCalculatorButton = document.getElementById('calorieCalculatorButton');
+        const foodTinderButton = document.getElementById('foodTinderButton');
+        const aiCulinarButton = document.getElementById('aiCulinarButton');
+        const profileButton = document.getElementById('profileButton');
+
+        const addRecipeSection = document.getElementById('addRecipeSection');
+        const viewRecipesSection = document.getElementById('viewRecipesSection');
+        const shoppingListSection = document.getElementById('shoppingListSection');
+        const calorieCalculatorSection = document.getElementById('calorieCalculatorSection');
+        const foodTinderSection = document.getElementById('foodTinderSection');
+        const aiCulinarSection = document.getElementById('aiCulinarSection');
+        const profileSection = document.getElementById('profileSection');
+
+        function hideAllSections() {
+            addRecipeSection.classList.add('hidden');
+            viewRecipesSection.classList.add('hidden');
+            shoppingListSection.classList.add('hidden');
+            calorieCalculatorSection.classList.add('hidden');
+            foodTinderSection.classList.add('hidden');
+            aiCulinarSection.classList.add('hidden');
+            profileSection.classList.add('hidden');
+        }
+
+        menuButton.addEventListener('click', () => {
+            menuOptions.classList.toggle('hidden');
+        });
+
+        addRecipeButton.addEventListener('click', () => {
+            hideAllSections();
+            addRecipeSection.classList.remove('hidden');
+        });
+
+        viewRecipesButton.addEventListener('click', () => {
+            hideAllSections();
+            viewRecipesSection.classList.remove('hidden');
+            loadRecipes();
+        });
+
+        shoppingListButton.addEventListener('click', () => {
+            hideAllSections();
+            shoppingListSection.classList.remove('hidden');
+        });
+
+        calorieCalculatorButton.addEventListener('click', () => {
+            hideAllSections();
+            calorieCalculatorSection.classList.remove('hidden');
+        });
+
+        foodTinderButton.addEventListener('click', () => {
+            hideAllSections();
+            foodTinderSection.classList.remove('hidden');
+        });
+
+        aiCulinarButton.addEventListener('click', () => {
+            hideAllSections();
+            aiCulinarSection.classList.remove('hidden');
+        });
+
+        profileButton.addEventListener('click', () => {
+            hideAllSections();
+            profileSection.classList.remove('hidden');
+        });
+
+        document.getElementById('recipeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const recipe = {
+                name: document.getElementById('name').value,
+                ingredients: document.getElementById('ingredients').value,
+                instructions: document.getElementById('instructions').value
+            };
+
+            const response = await fetch('/add_recipe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(recipe)
+            });
+
+            if (response.ok) {
+                alert('Recipe added successfully');
+                document.getElementById('recipeForm').reset();
+            } else {
+                alert('Error adding recipe');
+            }
+        });
+
+        async function loadRecipes() {
+            const response = await fetch('/get_recipes');
+            const recipes = await response.json();
+            const recipeList = document.getElementById('recipeList');
+            recipeList.innerHTML = '';
+            recipes.forEach(recipe => {
+                const li = document.createElement('li');
+                li.textContent = recipe.name;
+                li.addEventListener('click', () => showRecipeDetails(recipe));
+                recipeList.appendChild(li);
+            });
+        }
+
+        function showRecipeDetails(recipe) {
+            const recipeDetails = document.getElementById('recipeDetails');
+            const recipeName = document.getElementById('recipeName');
+            const recipeIngredients = document.getElementById('recipeIngredients');
+            const recipeInstructions = document.getElementById('recipeInstructions');
+
+            recipeName.textContent = recipe.name;
+            recipeIngredients.textContent = recipe.ingredients;
+            recipeInstructions.textContent = recipe.instructions;
+
+            recipeDetails.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
