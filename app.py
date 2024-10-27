@@ -12,6 +12,34 @@ NEO4J_PASSWORD = "saksuguan"  # Replace with your Neo4j password
 # Initialize Neo4j driver
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
+# Add these new functions after your existing imports and before the routes
+
+def create_shopping_item(tx, name):
+    query = (
+        "CREATE (i:ShoppingItem {name: $name, checked: false}) "
+        "RETURN id(i) AS item_id"
+    )
+    result = tx.run(query, name=name)
+    return result.single()["item_id"]
+
+def get_shopping_items(tx):
+    query = (
+        "MATCH (i:ShoppingItem) "
+        "RETURN id(i) AS id, i.name AS name, i.checked AS checked "
+        "ORDER BY i.checked, i.name"
+    )
+    result = tx.run(query)
+    return [dict(record) for record in result]
+
+def toggle_shopping_item(tx, item_id):
+    query = (
+        "MATCH (i:ShoppingItem) WHERE id(i) = $item_id "
+        "SET i.checked = NOT i.checked"
+    )
+    tx.run(query, item_id=item_id)
+
+# Add these new routes to your Flask application
+
 @app.route('/')
 def index():
     return app.send_static_file('index.html')
@@ -113,6 +141,32 @@ def setup_database():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# Add these new routes to your Flask application
+
+@app.route('/add_shopping_item', methods=['POST'])
+def add_shopping_item():
+    data = request.json
+    
+    with driver.session() as session:
+        item_id = session.write_transaction(create_shopping_item, data['name'])
+    
+    return jsonify({"message": "Item added successfully", "id": item_id}), 201
+
+@app.route('/get_shopping_list', methods=['GET'])
+def get_shopping_list():
+    with driver.session() as session:
+        items = session.read_transaction(get_shopping_items)
+    
+    return jsonify(items)
+
+@app.route('/toggle_shopping_item', methods=['POST'])
+def toggle_shopping_item_route():
+    data = request.json
+    
+    with driver.session() as session:
+        session.write_transaction(toggle_shopping_item, data['id'])
+    
+    return jsonify({"message": "Item toggled successfully"}), 200
+
 if __name__ == '__main__':
     app.run(debug=True)
-

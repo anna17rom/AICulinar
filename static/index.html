@@ -12,6 +12,8 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
             color: #333;
+            min-height: 100vh;
+            position: relative;
         }
         #sidebar {
             width: 250px;
@@ -21,12 +23,16 @@
             box-shadow: 2px 0 5px rgba(0,0,0,0.1);
             display: flex;
             flex-direction: column;
+            position: fixed;
+            left: 0;
+            transition: left 0.3s;
         }
         #content {
             flex-grow: 1;
-            padding: 40px;
-            max-width: 800px;
-            margin: 0 auto;
+            padding: 40px 60px; /* Increased horizontal padding */
+            margin-left: 290px; /* Increased from 250px to add space after sidebar */
+            transition: margin-left 0.3s;
+            max-width: 1200px; /* Increased max-width for better layout */
         }
         .hidden {
             display: none;
@@ -129,6 +135,254 @@
         button[type="submit"]:hover {
             background-color: #27ae60;
         }
+        #recipeImage {
+            max-width: 100%;
+            height: auto;
+            margin-top: 20px;
+        }
+        /* Shopping List Styles */
+        .shopping-list-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .add-item-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .add-item-form input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .list-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        #shoppingList {
+            list-style-type: none;
+            padding: 0;
+        }
+        .shopping-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .shopping-item:hover {
+            background-color: #e9ecef;
+        }
+        .shopping-item.checked {
+            background-color: #e9ecef;
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+        .shopping-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .shopping-item-text {
+            flex-grow: 1;
+        }
+        .delete-item {
+            color: #dc3545;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px 10px;
+            font-size: 16px;
+        }
+        .delete-item:hover {
+            color: #c82333;
+        }
+        /* Main Page and Search Styles */
+        #mainSection {
+            display: block;
+        }
+        .search-container {
+            background-color: white;
+            padding: 20px 30px; /* Increased padding */
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px; /* Increased gap */
+        }
+        .search-container input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .search-container button {
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .search-container button:hover {
+            background-color: #2980b9;
+        }
+        .recipe-feed {
+            margin-top: 20px;
+        }
+        .recipe-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 30px; /* Increased gap between recipe cards */
+            padding: 20px 0;
+        }
+        .recipe-post {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        .recipe-post:hover {
+            transform: translateY(-5px);
+        }
+        .recipe-post img {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .recipe-post-content {
+            padding: 15px;
+        }
+        .recipe-post h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+        .recipe-post p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.4;
+            /* Limit text to 2 lines */
+            display: -webkit-box;
+            
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Sidebar Toggle Styles */
+        .sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            left: 290px; /* Match the new margin-left of content */
+            transform: translateY(-50%);
+            background-color: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 0 5px 5px 0;
+            padding: 15px 10px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: left 0.3s;
+        }
+        .sidebar-toggle:hover {
+            background-color: #34495e;
+        }
+        .toggle-icon {
+            display: inline-block;
+            transition: transform 0.3s;
+        }
+        /* Styles for collapsed state */
+        .sidebar-collapsed #sidebar {
+            left: -250px;
+        }
+        .sidebar-collapsed #content {
+            margin-left: 40px; /* Add some space even when sidebar is collapsed */
+        }
+        .sidebar-collapsed .sidebar-toggle {
+            left: 0;
+        }
+        .sidebar-collapsed .toggle-icon {
+            transform: rotate(180deg);
+        }
+        /* Add some breathing room to the recipe feed title */
+        .recipe-feed h2 {
+            margin: 40px 0 20px 0;
+        }
+        /* Shopping List Styles */
+        .add-item-button {
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .add-item-button:hover {
+            background-color: #2980b9;
+        }
+
+        .shopping-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background-color: white;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .shopping-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .shopping-item input[type="checkbox"] {
+            margin-right: 15px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .shopping-item.checked {
+            background-color: #f8f9fa;
+        }
+
+        .shopping-item.checked .shopping-item-text {
+            text-decoration: line-through;
+            color: #6c757d;
+        }
+
+        .shopping-item-text {
+            flex-grow: 1;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .delete-item {
+            color: #dc3545;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 0 10px;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+
+        .delete-item:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -148,15 +402,31 @@
     <div id="content">
         <h1>Recipe Manager</h1>
         
+        <div id="mainSection">
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Search recipes...">
+                <button onclick="searchRecipes()">Search</button>
+            </div>
+            
+            <div class="recipe-feed">
+                <h2>Latest Recipes</h2>
+                <div id="recipePosts" class="recipe-grid">
+                    <!-- Recipe posts will be dynamically added here -->
+                </div>
+            </div>
+        </div>
+
         <div id="addRecipeSection" class="hidden">
             <h2>Add Recipe</h2>
-            <form id="recipeForm">
+            <form id="recipeForm" enctype="multipart/form-data">
                 <label for="name">Name:</label>
                 <input type="text" id="name" required><br>
                 <label for="ingredients">Ingredients:</label>
                 <textarea id="ingredients" rows="4" required></textarea><br>
                 <label for="instructions">Instructions:</label>
                 <textarea id="instructions" rows="6" required></textarea><br>
+                <label for="photo">Photo:</label>
+                <input type="file" id="photo" name="photo" accept="image/*"><br>
                 <button type="submit">Add Recipe</button>
             </form>
         </div>
@@ -166,6 +436,7 @@
             <ul id="recipeList"></ul>
             <div id="recipeDetails" class="hidden">
                 <h3 id="recipeName"></h3>
+                <img id="recipeImage" src="" alt="Recipe Image">
                 <h4>Ingredients:</h4>
                 <p id="recipeIngredients"></p>
                 <h4>Instructions:</h4>
@@ -175,7 +446,13 @@
 
         <div id="shoppingListSection" class="hidden">
             <h2>Shopping List</h2>
-            <p>Shopping list functionality coming soon!</p>
+            <div class="shopping-list-container">
+                <div class="add-item-form">
+                    <input type="text" id="newItem" placeholder="Enter item">
+                    <button class="add-item-button" onclick="addShoppingItem()">Add Item</button>
+                </div>
+                <ul id="shoppingList"></ul>
+            </div>
         </div>
 
         <div id="calorieCalculatorSection" class="hidden">
@@ -199,6 +476,11 @@
         </div>
     </div>
 
+    <!-- Add this button after the sidebar div -->
+    <button id="sidebarToggle" class="sidebar-toggle">
+        <span class="toggle-icon">◀</span>
+    </button>
+
     <script>
         const menuButton = document.getElementById('menuButton');
         const menuOptions = document.getElementById('menuOptions');
@@ -219,6 +501,8 @@
         const profileSection = document.getElementById('profileSection');
 
         function hideAllSections() {
+            // Modify the existing hideAllSections function to include mainSection
+            mainSection.classList.add('hidden');
             addRecipeSection.classList.add('hidden');
             viewRecipesSection.classList.add('hidden');
             shoppingListSection.classList.add('hidden');
@@ -246,6 +530,8 @@
         shoppingListButton.addEventListener('click', () => {
             hideAllSections();
             shoppingListSection.classList.remove('hidden');
+            document.getElementById('newItem').focus(); // Focus on input when section is shown
+            renderShoppingList();
         });
 
         calorieCalculatorButton.addEventListener('click', () => {
@@ -268,20 +554,18 @@
             profileSection.classList.remove('hidden');
         });
 
+        // Recipe Form Handling
         document.getElementById('recipeForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const recipe = {
-                name: document.getElementById('name').value,
-                ingredients: document.getElementById('ingredients').value,
-                instructions: document.getElementById('instructions').value
-            };
+            const formData = new FormData();
+            formData.append('name', document.getElementById('name').value);
+            formData.append('ingredients', document.getElementById('ingredients').value);
+            formData.append('instructions', document.getElementById('instructions').value);
+            formData.append('photo', document.getElementById('photo').files[0]);
 
             const response = await fetch('/add_recipe', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(recipe)
+                body: formData
             });
 
             if (response.ok) {
@@ -292,6 +576,7 @@
             }
         });
 
+        // Recipe Loading and Display
         async function loadRecipes() {
             const response = await fetch('/get_recipes');
             const recipes = await response.json();
@@ -308,15 +593,162 @@
         function showRecipeDetails(recipe) {
             const recipeDetails = document.getElementById('recipeDetails');
             const recipeName = document.getElementById('recipeName');
+            const recipeImage = document.getElementById('recipeImage');
             const recipeIngredients = document.getElementById('recipeIngredients');
             const recipeInstructions = document.getElementById('recipeInstructions');
 
             recipeName.textContent = recipe.name;
+            recipeImage.src = recipe.photo_url || '';
+            recipeImage.style.display = recipe.photo_url ? 'block' : 'none';
             recipeIngredients.textContent = recipe.ingredients;
             recipeInstructions.textContent = recipe.instructions;
 
             recipeDetails.classList.remove('hidden');
         }
+
+        // Shopping List Functionality
+        let shoppingItems = JSON.parse(localStorage.getItem('shoppingItems')) || [];
+
+        function updateLocalStorage() {
+            localStorage.setItem('shoppingItems', JSON.stringify(shoppingItems));
+        }
+
+        function renderShoppingList() {
+            const shoppingList = document.getElementById('shoppingList');
+            shoppingList.innerHTML = '';
+            
+            shoppingItems.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = `shopping-item ${item.checked ? 'checked' : ''}`;
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = item.checked;
+                checkbox.addEventListener('change', () => toggleItem(index));
+
+                const text = document.createElement('span');
+                text.className = 'shopping-item-text';
+                text.textContent = item.text;
+
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'delete-item';
+                deleteButton.innerHTML = '×';
+                deleteButton.addEventListener('click', () => deleteItem(index));
+
+                li.appendChild(checkbox);
+                li.appendChild(text);
+                li.appendChild(deleteButton);
+                shoppingList.appendChild(li);
+            });
+        }
+
+        function addShoppingItem() {
+            const input = document.getElementById('newItem');
+            const text = input.value.trim();
+            
+            if (text) {
+                shoppingItems.push({
+                    text: text,
+                    checked: false
+                });
+                updateLocalStorage();
+                renderShoppingList();
+                input.value = '';
+                input.focus(); // Keep focus on input for multiple additions
+            }
+        }
+
+        function toggleItem(index) {
+            shoppingItems[index].checked = !shoppingItems[index].checked;
+            updateLocalStorage();
+            renderShoppingList();
+        }
+
+        function deleteItem(index) {
+            shoppingItems.splice(index, 1);
+            updateLocalStorage();
+            renderShoppingList();
+        }
+
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const newItemInput = document.getElementById('newItem');
+            
+            // Enter key event listener
+            newItemInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addShoppingItem();
+                }
+            });
+
+            // Initial render of shopping list
+            renderShoppingList();
+        });
+
+        // Add this to your window.onload or at the end of your script
+        function loadMainPage() {
+            hideAllSections();
+            mainSection.classList.remove('hidden');
+            loadRecipePosts();
+        }
+
+        async function loadRecipePosts() {
+            const recipePosts = document.getElementById('recipePosts');
+            const response = await fetch('/get_recipes');
+            const recipes = await response.json();
+            
+            recipePosts.innerHTML = '';
+            recipes.forEach(recipe => {
+                const post = document.createElement('div');
+                post.className = 'recipe-post';
+                post.innerHTML = `
+                    <img src="${recipe.photo_url || '/static/default-recipe.jpg'}" alt="${recipe.name}">
+                    <div class="recipe-post-content">
+                        <h3>${recipe.name}</h3>
+                        <p>${recipe.ingredients}</p>
+                    </div>
+                `;
+                post.addEventListener('click', () => {
+                    hideAllSections();
+                    viewRecipesSection.classList.remove('hidden');
+                    showRecipeDetails(recipe);
+                });
+                recipePosts.appendChild(post);
+            });
+        }
+
+        function searchRecipes() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const posts = document.querySelectorAll('.recipe-post');
+            
+            posts.forEach(post => {
+                const title = post.querySelector('h3').textContent.toLowerCase();
+                const ingredients = post.querySelector('p').textContent.toLowerCase();
+                
+                if (title.includes(searchTerm) || ingredients.includes(searchTerm)) {
+                    post.style.display = 'block';
+                } else {
+                    post.style.display = 'none';
+                }
+            });
+        }
+
+        // Add home button functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            loadMainPage(); // Load main page by default
+        });
+
+        // Add event listener for search input
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchRecipes();
+            }
+        });
+
+        // Add this to your existing JavaScript
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.body.classList.toggle('sidebar-collapsed');
+        });
     </script>
 </body>
 </html>
