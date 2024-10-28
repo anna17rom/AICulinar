@@ -383,6 +383,65 @@
         .delete-item:hover {
             opacity: 1;
         }
+
+        .recipe-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: white;
+        }
+
+        #recipeGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+
+        #recipeFilters {
+            padding: 20px;
+            background-color: #f5f5f5;
+            margin-bottom: 20px;
+        }
+
+        #recipeFilters input,
+        #recipeFilters select {
+            margin-right: 10px;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .modal {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .close {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            font-size: 24px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -431,17 +490,21 @@
             </form>
         </div>
 
-        <div id="viewRecipesSection" class="hidden">
-            <h2>Recipes</h2>
-            <ul id="recipeList"></ul>
-            <div id="recipeDetails" class="hidden">
-                <h3 id="recipeName"></h3>
-                <img id="recipeImage" src="" alt="Recipe Image">
-                <h4>Ingredients:</h4>
-                <p id="recipeIngredients"></p>
-                <h4>Instructions:</h4>
-                <p id="recipeInstructions"></p>
+        <div id="viewRecipesSection">
+            <h2>All Recipes</h2>
+            <div id="recipeFilters">
+                <input type="text" id="searchRecipes" placeholder="Search recipes...">
+                <select id="cuisineFilter">
+                    <option value="">All Cuisines</option>
+                </select>
+                <select id="difficultyFilter">
+                    <option value="">All Difficulties</option>
+                    <option value="Easy">Easy</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Hard">Hard</option>
+                </select>
             </div>
+            <div id="recipeGrid"></div>
         </div>
 
         <div id="shoppingListSection" class="hidden">
@@ -749,6 +812,104 @@
         document.getElementById('sidebarToggle').addEventListener('click', function() {
             document.body.classList.toggle('sidebar-collapsed');
         });
+
+        // Load recipes when the page loads
+        document.addEventListener('DOMContentLoaded', loadRecipes);
+
+        async function loadRecipes() {
+            try {
+                const response = await fetch('/get_recipes');
+                if (!response.ok) throw new Error('Failed to fetch recipes');
+                
+                const recipes = await response.json();
+                displayRecipes(recipes);
+                updateFilters(recipes);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load recipes');
+            }
+        }
+
+        function displayRecipes(recipes) {
+            const recipeGrid = document.getElementById('recipeGrid');
+            recipeGrid.innerHTML = '';
+
+            recipes.forEach(recipe => {
+                const recipeCard = document.createElement('div');
+                recipeCard.className = 'recipe-card';
+                recipeCard.innerHTML = `
+                    <h3>${recipe.name}</h3>
+                    <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
+                    <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
+                    <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
+                    <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
+                    <button onclick="showRecipeDetails(${JSON.stringify(recipe).replace(/"/g, '&quot;')})">
+                        View Details
+                    </button>
+                `;
+                recipeGrid.appendChild(recipeCard);
+            });
+        }
+
+        function showRecipeDetails(recipe) {
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close">&times;</span>
+                    <h2>${recipe.name}</h2>
+                    <h3>Ingredients:</h3>
+                    <ul>
+                        ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
+                    </ul>
+                    <h3>Instructions:</h3>
+                    <p>${recipe.instructions}</p>
+                    <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
+                    <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
+                    <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
+                    <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const closeBtn = modal.querySelector('.close');
+            closeBtn.onclick = () => modal.remove();
+            window.onclick = (event) => {
+                if (event.target === modal) modal.remove();
+            };
+        }
+
+        // Add search and filter functionality
+        document.getElementById('searchRecipes').addEventListener('input', filterRecipes);
+        document.getElementById('cuisineFilter').addEventListener('change', filterRecipes);
+        document.getElementById('difficultyFilter').addEventListener('change', filterRecipes);
+
+        async function filterRecipes() {
+            const searchTerm = document.getElementById('searchRecipes').value.toLowerCase();
+            const selectedCuisine = document.getElementById('cuisineFilter').value;
+            const selectedDifficulty = document.getElementById('difficultyFilter').value;
+
+            const response = await fetch('/get_recipes');
+            const recipes = await response.json();
+
+            const filteredRecipes = recipes.filter(recipe => {
+                const matchesSearch = recipe.name.toLowerCase().includes(searchTerm);
+                const matchesCuisine = !selectedCuisine || recipe.cuisine === selectedCuisine;
+                const matchesDifficulty = !selectedDifficulty || recipe.difficulty === selectedDifficulty;
+                return matchesSearch && matchesCuisine && matchesDifficulty;
+            });
+
+            displayRecipes(filteredRecipes);
+        }
+
+        function updateFilters(recipes) {
+            const cuisines = [...new Set(recipes.map(r => r.cuisine).filter(Boolean))];
+            const cuisineFilter = document.getElementById('cuisineFilter');
+            cuisineFilter.innerHTML = '<option value="">All Cuisines</option>';
+            cuisines.forEach(cuisine => {
+                cuisineFilter.innerHTML += `<option value="${cuisine}">${cuisine}</option>`;
+            });
+        }
     </script>
 </body>
 </html>
