@@ -3,6 +3,8 @@ from neo4j import GraphDatabase
 import os
 from dotenv import load_dotenv
 import time
+import requests
+from typing import List, Dict
 
 load_dotenv()
 
@@ -12,6 +14,10 @@ app = Flask(__name__)
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "testpassword")
+
+# Spoonacular API details
+SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY", "71e0ef0aa4c24ccc8cd0bec39181c81f")
+SPOONACULAR_BASE_URL = "https://api.spoonacular.com/recipes"
 
 def init_database():
     """Initialize the database with schema and sample data"""
@@ -111,6 +117,116 @@ def get_recipes():
             return jsonify(recipes), 200
     except Exception as e:
         print(f"Error getting recipes: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+def import_recipes_from_spoonacular(limit: int = 100):
+    """Import recipes from Spoonacular API"""
+    try:
+        # Get random recipes from Spoonacular
+        params = {
+            "apiKey": SPOONACULAR_API_KEY,
+            "number": limit,
+            "addRecipeInformation": True,
+        }
+        response = requests.get(f"{SPOONACULAR_BASE_URL}/random", params=params)
+        recipes = response.json()["recipes"]
+
+        with driver.session() as session:
+            for recipe in recipes:
+                # Create Cypher query for each recipe
+                query = """
+                MERGE (r:Recipe {recipe_id: $recipe_id})
+                SET r.name = $name,
+                    r.instructions = $instructions,
+                    r.calories = $calories,
+                    r.time = $time,
+                    r.difficulty = 'medium',
+                    r.cuisine = $cuisine
+                WITH r
+                UNWIND $ingredients as ingredient
+                MERGE (i:Ingredient {name: ingredient})
+                MERGE (r)-[:CONTAINS]->(i)
+                """
+                
+                # Extract recipe data
+                recipe_data = {
+                    "recipe_id": str(recipe["id"]),
+                    "name": recipe["title"],
+                    "instructions": recipe["instructions"],
+                    "calories": recipe.get("nutrition", {}).get("nutrients", [{}])[0].get("amount", 0),
+                    "time": recipe["readyInMinutes"],
+                    "cuisine": recipe.get("cuisines", ["Unknown"])[0] if recipe.get("cuisines") else "Unknown",
+                    "ingredients": [ing["name"] for ing in recipe["extendedIngredients"]]
+                }
+                
+                session.run(query, recipe_data)
+        
+        return True
+    except Exception as e:
+        print(f"Error importing recipes: {str(e)}")
+        return False
+
+@app.route('/import_recipes', methods=['POST'])
+def import_recipes():
+    try:
+        limit = request.json.get('limit', 100)
+        success = import_recipes_from_spoonacular(limit)
+        if success:
+            return jsonify({"message": f"Successfully imported recipes"}), 200
+        return jsonify({"error": "Failed to import recipes"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Add this new route after your other routes
+@app.route('/add_recipe', methods=['POST'])
+def add_recipe():
+    try:
+        data = request.form
+        
+        # Generate a unique recipe_id (you can modify this logic if needed)
+        recipe_id = str(int(time.time()))
+        
+        with driver.session() as session:
+            # Create Cypher query for the new recipe
+            query = """
+            CREATE (r:Recipe {
+                recipe_id: $recipe_id,
+                name: $name,
+                instructions: $instructions,
+                difficulty: 'medium',
+                time: 30,
+                calories: 0
+            })
+            WITH r
+            UNWIND $ingredients as ingredient
+            MERGE (i:Ingredient {name: toLower(trim(ingredient))})
+            MERGE (r)-[:CONTAINS]->(i)
+            RETURN r
+            """
+            
+            # Parse ingredients from the comma or newline separated string
+            ingredients_text = data.get('ingredients', '')
+            ingredients_list = [
+                ing.strip() 
+                for ing in ingredients_text.replace('\n', ',').split(',')
+                if ing.strip()
+            ]
+            
+            # Recipe data for the query
+            recipe_data = {
+                "recipe_id": recipe_id,
+                "name": data.get('name'),
+                "instructions": data.get('instructions'),
+                "ingredients": ingredients_list
+            }
+            
+            # Execute the query
+            session.run(query, recipe_data)
+            
+            return jsonify({"message": "Recipe added successfully"}), 200
+            
+    except Exception as e:
+        print(f"Error adding recipe: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 # Add other routes as needed...

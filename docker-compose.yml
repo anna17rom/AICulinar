@@ -10,6 +10,7 @@ services:
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=testpassword
       - CLEAN_DB=false  # Set to true if you want to clean the DB on startup
+      - SPOONACULAR_API_KEY=71e0ef0aa4c24ccc8cd0bec39181c81f
     depends_on:
       - neo4j
     volumes:
