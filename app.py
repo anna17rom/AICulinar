@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import time
 import requests
 from typing import List, Dict
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
@@ -16,8 +17,21 @@ NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "testpassword")
 
 # Spoonacular API details
-SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY", "71e0ef0aa4c24ccc8cd0bec39181c81f")
+SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY", "your_spoonacular_api_key")
 SPOONACULAR_BASE_URL = "https://api.spoonacular.com/recipes"
+
+# Add these configurations after creating the Flask app
+UPLOAD_FOLDER = 'static/recipe_images'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Create upload folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def init_database():
     """Initialize the database with schema and sample data"""
@@ -109,6 +123,7 @@ def get_recipes():
                 r.time as time,
                 r.difficulty as difficulty,
                 r.cuisine as cuisine,
+                r.image_path as image_path,
                 ingredients
             ORDER BY r.name
             """
@@ -141,10 +156,11 @@ def import_recipes_from_spoonacular(limit: int = 100):
                     r.calories = $calories,
                     r.time = $time,
                     r.difficulty = 'medium',
-                    r.cuisine = $cuisine
+                    r.cuisine = $cuisine,
+                    r.image_path = $image_path
                 WITH r
                 UNWIND $ingredients as ingredient
-                MERGE (i:Ingredient {name: ingredient})
+                MERGE (i:Ingredient {name: toLower(trim(ingredient))})
                 MERGE (r)-[:CONTAINS]->(i)
                 """
                 
@@ -156,7 +172,8 @@ def import_recipes_from_spoonacular(limit: int = 100):
                     "calories": recipe.get("nutrition", {}).get("nutrients", [{}])[0].get("amount", 0),
                     "time": recipe["readyInMinutes"],
                     "cuisine": recipe.get("cuisines", ["Unknown"])[0] if recipe.get("cuisines") else "Unknown",
-                    "ingredients": [ing["name"] for ing in recipe["extendedIngredients"]]
+                    "ingredients": [ing["name"] for ing in recipe["extendedIngredients"]],
+                    "image_path": recipe.get("image", "")
                 }
                 
                 session.run(query, recipe_data)
@@ -182,9 +199,24 @@ def import_recipes():
 def add_recipe():
     try:
         data = request.form
+        print("Received form data:", data)  # Debug log
         
-        # Generate a unique recipe_id (you can modify this logic if needed)
+        # Generate a unique recipe_id
         recipe_id = str(int(time.time()))
+        
+        # Handle image upload
+        image_path = None
+        if 'image' in request.files:
+            file = request.files['image']
+            print("Received file:", file.filename if file else "No file")  # Debug log
+            
+            if file and file.filename and allowed_file(file.filename):
+                filename = secure_filename(f"{recipe_id}_{file.filename}")
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                print(f"Saving file to: {filepath}")  # Debug log
+                file.save(filepath)
+                image_path = f"/static/recipe_images/{filename}"
+                print(f"Image path set to: {image_path}")  # Debug log
         
         with driver.session() as session:
             # Create Cypher query for the new recipe
@@ -194,8 +226,10 @@ def add_recipe():
                 name: $name,
                 instructions: $instructions,
                 difficulty: 'medium',
-                time: 30,
-                calories: 0
+                time: $time,
+                calories: $calories,
+                cuisine: 'Unknown',
+                image_path: $image_path
             })
             WITH r
             UNWIND $ingredients as ingredient
@@ -212,24 +246,82 @@ def add_recipe():
                 if ing.strip()
             ]
             
+            # Get optional fields with default values
+            time_required = int(data.get('time', 30))
+            calories = int(data.get('calories', 0))
+            
             # Recipe data for the query
             recipe_data = {
                 "recipe_id": recipe_id,
                 "name": data.get('name'),
                 "instructions": data.get('instructions'),
-                "ingredients": ingredients_list
+                "ingredients": ingredients_list,
+                "image_path": image_path,
+                "time": time_required,
+                "calories": calories
             }
             
-            # Execute the query
+            print("Executing query with data:", recipe_data)  # Debug log
             session.run(query, recipe_data)
             
-            return jsonify({"message": "Recipe added successfully"}), 200
+            return jsonify({
+                "message": "Recipe added successfully",
+                "recipe_id": recipe_id,
+                "image_path": image_path
+            }), 200
             
     except Exception as e:
         print(f"Error adding recipe: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Add other routes as needed...
+# Add this new route
+@app.route('/search_recipes')
+def search_recipes():
+    try:
+        search_term = request.args.get('term', '').lower()
+        cuisine = request.args.get('cuisine', '')
+        difficulty = request.args.get('difficulty', '')
+        
+        with driver.session() as session:
+            query = """
+            MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
+            WHERE toLower(r.name) CONTAINS $search_term
+            OR toLower(i.name) CONTAINS $search_term
+            OR toLower(r.instructions) CONTAINS $search_term
+            WITH r, collect(i.name) as ingredients
+            WHERE (size($cuisine) = 0 OR r.cuisine = $cuisine)
+            AND (size($difficulty) = 0 OR r.difficulty = $difficulty)
+            RETURN 
+                id(r) as id,
+                r.name as name,
+                r.instructions as instructions,
+                r.calories as calories,
+                r.time as time,
+                r.difficulty as difficulty,
+                r.cuisine as cuisine,
+                r.image_path as image_path,
+                ingredients
+            ORDER BY r.name
+            """
+            
+            result = session.run(query, {
+                "search_term": search_term,
+                "cuisine": cuisine,
+                "difficulty": difficulty
+            })
+            
+            recipes = [dict(record) for record in result]
+            return jsonify(recipes), 200
+            
+    except Exception as e:
+        print(f"Error searching recipes: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Route to serve images from the static folder (if necessary)
+@app.route('/static/recipe_images/<filename>')
+def serve_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
+

@@ -477,7 +477,7 @@
 
         <div id="addRecipeSection" class="hidden">
             <h2>Add Recipe</h2>
-            <form id="recipeForm">
+            <form id="recipeForm" enctype="multipart/form-data">
                 <label for="name">Recipe Name:</label>
                 <input type="text" id="name" name="name" required><br>
                 
@@ -488,6 +488,9 @@
                 <label for="instructions">Instructions:</label>
                 <textarea id="instructions" name="instructions" rows="6" required
                           placeholder="Enter detailed cooking instructions..."></textarea><br>
+                
+                <label for="image">Recipe Image (optional):</label>
+                <input type="file" id="image" name="image" accept="image/*"><br>
                 
                 <button type="submit">Add Recipe</button>
             </form>
@@ -625,24 +628,49 @@
             e.preventDefault();
             
             const formData = new FormData();
-            formData.append('name', document.getElementById('name').value);
-            formData.append('ingredients', document.getElementById('ingredients').value);
-            formData.append('instructions', document.getElementById('instructions').value);
+            const name = document.getElementById('name').value;
+            const ingredients = document.getElementById('ingredients').value;
+            const instructions = document.getElementById('instructions').value;
+            const imageFile = document.getElementById('image').files[0];
+            
+            // Debug logs
+            console.log('Name:', name);
+            console.log('Ingredients:', ingredients);
+            console.log('Instructions:', instructions);
+            console.log('Image file:', imageFile);
+            
+            // Validate input
+            if (!name || !ingredients || !instructions) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            formData.append('name', name);
+            formData.append('ingredients', ingredients);
+            formData.append('instructions', instructions);
+            if (imageFile) {
+                formData.append('image', imageFile);
+                console.log('Image appended to form data');
+            }
 
             try {
+                console.log('Submitting form data...');
                 const response = await fetch('/add_recipe', {
                     method: 'POST',
-                    body: formData
+                    body: formData // FormData automatically sets the correct content-type
                 });
 
+                const result = await response.json();
+                console.log('Server response:', result);
+                
                 if (response.ok) {
                     alert('Recipe added successfully!');
                     document.getElementById('recipeForm').reset();
-                    // Optionally reload the recipes
                     loadRecipes();
+                    hideAllSections();
+                    viewRecipesSection.classList.remove('hidden');
                 } else {
-                    const error = await response.json();
-                    alert(`Error adding recipe: ${error.error}`);
+                    alert(`Error adding recipe: ${result.error}`);
                 }
             } catch (error) {
                 alert('Error adding recipe. Please try again.');
@@ -791,20 +819,34 @@
             });
         }
 
-        function searchRecipes() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const posts = document.querySelectorAll('.recipe-post');
+        async function searchRecipes() {
+            const searchTerm = document.getElementById('searchInput').value;
+            const recipePosts = document.getElementById('recipePosts');
             
-            posts.forEach(post => {
-                const title = post.querySelector('h3').textContent.toLowerCase();
-                const ingredients = post.querySelector('p').textContent.toLowerCase();
+            try {
+                const response = await fetch(`/search_recipes?term=${encodeURIComponent(searchTerm)}`);
+                if (!response.ok) throw new Error('Search failed');
                 
-                if (title.includes(searchTerm) || ingredients.includes(searchTerm)) {
-                    post.style.display = 'block';
-                } else {
-                    post.style.display = 'none';
-                }
-            });
+                const recipes = await response.json();
+                
+                recipePosts.innerHTML = '';
+                recipes.forEach(recipe => {
+                    const post = document.createElement('div');
+                    post.className = 'recipe-post';
+                    post.innerHTML = `
+                        <img src="${recipe.photo_url || '/static/default-recipe.jpg'}" alt="${recipe.name}">
+                        <div class="recipe-post-content">
+                            <h3>${recipe.name}</h3>
+                            <p>${recipe.ingredients.join(', ')}</p>
+                        </div>
+                    `;
+                    post.addEventListener('click', () => showRecipeDetails(recipe));
+                    recipePosts.appendChild(post);
+                });
+            } catch (error) {
+                console.error('Search error:', error);
+                alert('Error performing search');
+            }
         }
 
         // Add home button functionality
@@ -849,11 +891,13 @@
                 const recipeCard = document.createElement('div');
                 recipeCard.className = 'recipe-card';
                 recipeCard.innerHTML = `
+                    <img src="${recipe.image_path || '/static/default-recipe.jpg'}" 
+                         alt="${recipe.name}"
+                         onerror="this.src='/static/default-recipe.jpg'">
                     <h3>${recipe.name}</h3>
                     <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
                     <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
                     <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
-                    <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
                     <button onclick="showRecipeDetails(${JSON.stringify(recipe).replace(/"/g, '&quot;')})">
                         View Details
                     </button>
@@ -896,21 +940,26 @@
         document.getElementById('difficultyFilter').addEventListener('change', filterRecipes);
 
         async function filterRecipes() {
-            const searchTerm = document.getElementById('searchRecipes').value.toLowerCase();
+            const searchTerm = document.getElementById('searchRecipes').value;
             const selectedCuisine = document.getElementById('cuisineFilter').value;
             const selectedDifficulty = document.getElementById('difficultyFilter').value;
 
-            const response = await fetch('/get_recipes');
-            const recipes = await response.json();
-
-            const filteredRecipes = recipes.filter(recipe => {
-                const matchesSearch = recipe.name.toLowerCase().includes(searchTerm);
-                const matchesCuisine = !selectedCuisine || recipe.cuisine === selectedCuisine;
-                const matchesDifficulty = !selectedDifficulty || recipe.difficulty === selectedDifficulty;
-                return matchesSearch && matchesCuisine && matchesDifficulty;
-            });
-
-            displayRecipes(filteredRecipes);
+            try {
+                const params = new URLSearchParams({
+                    term: searchTerm,
+                    cuisine: selectedCuisine,
+                    difficulty: selectedDifficulty
+                });
+                
+                const response = await fetch(`/search_recipes?${params}`);
+                if (!response.ok) throw new Error('Filter failed');
+                
+                const recipes = await response.json();
+                displayRecipes(recipes);
+            } catch (error) {
+                console.error('Filter error:', error);
+                alert('Error applying filters');
+            }
         }
 
         function updateFilters(recipes) {
@@ -921,6 +970,35 @@
                 cuisineFilter.innerHTML += `<option value="${cuisine}">${cuisine}</option>`;
             });
         }
+
+        // Add debouncing to prevent too many requests
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Add event listeners with debouncing
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('searchInput');
+            const searchRecipesInput = document.getElementById('searchRecipes');
+            
+            const debouncedSearch = debounce(searchRecipes, 300);
+            const debouncedFilter = debounce(filterRecipes, 300);
+            
+            searchInput.addEventListener('input', debouncedSearch);
+            searchRecipesInput.addEventListener('input', debouncedFilter);
+            
+            // Add event listeners for filters
+            document.getElementById('cuisineFilter').addEventListener('change', filterRecipes);
+            document.getElementById('difficultyFilter').addEventListener('change', filterRecipes);
+        });
     </script>
 </body>
 </html>

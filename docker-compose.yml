@@ -15,7 +15,8 @@ services:
       - neo4j
     volumes:
       - .:/app
-      - ./setup:/app/setup
+      - ./static:/app/static
+      - ./static/recipe_images:/app/static/recipe_images
     networks:
       - app-network
 
