@@ -1,4 +1,6 @@
-flask
-neo4j
-python-dotenv
-requests
+   Flask
+   neo4j
+   python-dotenv
+   requests
+   werkzeug
+   cloudinary

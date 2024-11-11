@@ -6,6 +6,9 @@ import time
 import requests
 from typing import List, Dict
 from werkzeug.utils import secure_filename
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 load_dotenv()
 
@@ -28,6 +31,13 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Create upload folder if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Configure Cloudinary with your credentials
+cloudinary.config(
+    cloud_name='dwjzjoidh',  # Your Cloudinary cloud name
+    api_key='415893377848277',  # Your Cloudinary API key
+    api_secret='Plp-FDLQipVhCZFZI43TXxIc1Gc'  # Your Cloudinary API secret
+)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -204,19 +214,20 @@ def add_recipe():
         # Generate a unique recipe_id
         recipe_id = str(int(time.time()))
         
-        # Handle image upload
+        # Handle image upload to Cloudinary
         image_path = None
         if 'image' in request.files:
             file = request.files['image']
             print("Received file:", file.filename if file else "No file")  # Debug log
             
             if file and file.filename and allowed_file(file.filename):
-                filename = secure_filename(f"{recipe_id}_{file.filename}")
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                print(f"Saving file to: {filepath}")  # Debug log
-                file.save(filepath)
-                image_path = f"/static/recipe_images/{filename}"
-                print(f"Image path set to: {image_path}")  # Debug log
+                # Upload to Cloudinary
+                upload_result = cloudinary.uploader.upload(file)
+                image_path = upload_result['secure_url']  # Get the URL of the uploaded image
+                print(f"Image uploaded to Cloudinary: {image_path}")  # Debug log
+            else:
+                print("File not allowed or no file uploaded")  # Debug log
+                return jsonify({"error": "File type not allowed or no file uploaded"}), 400
         
         with driver.session() as session:
             # Create Cypher query for the new recipe
@@ -256,7 +267,7 @@ def add_recipe():
                 "name": data.get('name'),
                 "instructions": data.get('instructions'),
                 "ingredients": ingredients_list,
-                "image_path": image_path,
+                "image_path": image_path,  # This will be the Cloudinary URL
                 "time": time_required,
                 "calories": calories
             }
@@ -267,7 +278,7 @@ def add_recipe():
             return jsonify({
                 "message": "Recipe added successfully",
                 "recipe_id": recipe_id,
-                "image_path": image_path
+                "image_path": image_path  # This will be the Cloudinary URL
             }), 200
             
     except Exception as e:
