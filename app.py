@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from neo4j import GraphDatabase
 import os
 from dotenv import load_dotenv
@@ -9,6 +9,9 @@ from werkzeug.utils import secure_filename
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from flask_mail import Mail, Message
+import uuid
+from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
 
@@ -38,6 +41,18 @@ cloudinary.config(
     api_key='415893377848277',  # Your Cloudinary API key
     api_secret='Plp-FDLQipVhCZFZI43TXxIc1Gc'  # Your Cloudinary API secret
 )
+
+# Configure Flask-Mail
+app.config['MAIL_SERVER'] = 'smtp.example.com'  # Replace with your mail server
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'your_email@example.com'  # Your email
+app.config['MAIL_PASSWORD'] = 'your_password'  # Your email password
+app.config['MAIL_DEFAULT_SENDER'] = 'your_email@example.com'  # Default sender
+mail = Mail(app)
+
+# User database (for demonstration purposes, use a real database in production)
+users = {}
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -332,6 +347,89 @@ def search_recipes():
 @app.route('/static/recipe_images/<filename>')
 def serve_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/signup', methods=['POST'])
+def signup():
+    data = request.json
+    name = data.get('name')
+    email = data.get('email')
+    password = data.get('password')
+
+    # Check if the email already exists
+    with driver.session() as session:
+        existing_user = session.run("""
+            MATCH (u:User {email: $email})
+            RETURN u
+        """, {"email": email}).single()
+
+        if existing_user:
+            return jsonify({"error": "Email already registered"}), 400
+
+    # Create a unique verification token
+    token = str(uuid.uuid4())
+
+    # Store user in Neo4j
+    try:
+        with driver.session() as session:
+            hashed_password = generate_password_hash(password)
+            session.run("""
+                CREATE (u:User {name: $name, email: $email, password: $hashed_password, verified: false, token: $token})
+            """, {
+                "name": name,
+                "email": email,
+                "hashed_password": hashed_password,
+                "token": token
+            })
+    except Exception as e:
+        return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
+
+    # Send verification email
+    verification_link = f"http://localhost:5000/verify/{token}"
+    msg = Message("Verify Your Email", recipients=[email])
+    msg.body = f"Please click the link to verify your account: {verification_link}"
+    mail.send(msg)
+
+    return jsonify({"message": "Verification email sent"}), 200
+
+@app.route('/verify/<token>', methods=['GET'])
+def verify(token):
+    try:
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {token: $token})
+                SET u.verified = true
+                RETURN u
+            """, {"token": token})
+
+            if result.single() is None:
+                return jsonify({"error": "Invalid token"}), 400
+
+            return jsonify({"message": "Account verified successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Verification failed: {str(e)}"}), 500
+
+@app.route('/signin', methods=['POST'])
+def signin():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    # Check if the user exists and the password matches
+    with driver.session() as session:
+        user = session.run("""
+            MATCH (u:User {email: $email})
+            RETURN u
+        """, {"email": email}).single()
+
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+
+        # Here you should compare the hashed password with the stored password
+        if not check_password_hash(user['u']['password'], password):
+            return jsonify({"error": "Invalid password"}), 401
+
+    # Return success and a flag to indicate sign-in success
+    return jsonify({"message": "Sign in successful", "signedIn": True}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

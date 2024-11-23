@@ -1,6 +1,7 @@
-   Flask
-   neo4j
-   python-dotenv
-   requests
-   werkzeug
-   cloudinary
+Flask
+Flask-Mail
+python-dotenv
+neo4j
+requests
+cloudinary
+werkzeug

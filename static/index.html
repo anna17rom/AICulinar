@@ -442,12 +442,45 @@
             font-size: 24px;
             cursor: pointer;
         }
+
+        #myRecipes {
+            margin-top: 20px;
+        }
+
+        .recipe-category {
+            margin-bottom: 20px;
+        }
+
+        .recipe-category h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .recipe-list {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .recipe-list li {
+            padding: 10px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: background-color 0.3s;
+        }
+
+        .recipe-list li:hover {
+            background-color: #d5dbdb;
+        }
     </style>
 </head>
 <body>
     <div id="sidebar">
-        <button id="profileButton">My Profile</button>
+        <button id="profileButton" class="hidden">My Profile</button>
         <button id="menuButton">Menu</button>
+        <button id="signupButton">Sign Up</button>
+        <button id="signinButton">Sign In</button>
         <div id="menuOptions" class="hidden">
             <button id="addRecipeButton">Add Recipe</button>
             <button id="viewRecipesButton">View Recipes</button>
@@ -541,7 +574,28 @@
 
         <div id="profileSection" class="hidden">
             <h2>My Profile</h2>
-            <p>Profile functionality coming soon!</p>
+            <button id="myRecipesButton">My Recipes</button>
+            <div id="myRecipes" class="hidden">
+                <h3>My Recipes</h3>
+                <div class="recipe-category">
+                    <h4>Added</h4>
+                    <ul id="addedRecipes" class="recipe-list">
+                        <!-- Added recipes will be listed here -->
+                    </ul>
+                </div>
+                <div class="recipe-category">
+                    <h4>Liked</h4>
+                    <ul id="likedRecipes" class="recipe-list">
+                        <!-- Liked recipes will be listed here -->
+                    </ul>
+                </div>
+                <div class="recipe-category">
+                    <h4>Want to Try</h4>
+                    <ul id="wantToTryRecipes" class="recipe-list">
+                        <!-- Recipes to try will be listed here -->
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -549,6 +603,35 @@
     <button id="sidebarToggle" class="sidebar-toggle">
         <span class="toggle-icon">◀</span>
     </button>
+
+    <div id="signupModal" class="hidden">
+        <h2>Sign Up</h2>
+        <form id="signupForm">
+            <label for="signupName">Name:</label>
+            <input type="text" id="signupName" required>
+            
+            <label for="signupEmail">Email:</label>
+            <input type="email" id="signupEmail" required>
+            
+            <label for="signupPassword">Password:</label>
+            <input type="password" id="signupPassword" required>
+            
+            <button type="submit">Sign Up</button>
+        </form>
+    </div>
+
+    <div id="signinModal" class="hidden">
+        <h2>Sign In</h2>
+        <form id="signinForm">
+            <label for="signinEmail">Email:</label>
+            <input type="email" id="signinEmail" required>
+            
+            <label for="signinPassword">Password:</label>
+            <input type="password" id="signinPassword" required>
+            
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
 
     <script>
         const menuButton = document.getElementById('menuButton');
@@ -998,6 +1081,72 @@
             // Add event listeners for filters
             document.getElementById('cuisineFilter').addEventListener('change', filterRecipes);
             document.getElementById('difficultyFilter').addEventListener('change', filterRecipes);
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+
+            const response = await fetch('/signup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, email, password })
+            });
+
+            const result = await response.json();
+            alert(result.message || result.error);
+            if (response.ok) {
+                document.getElementById('signupModal').classList.add('hidden');
+            }
+        });
+
+        const signupButton = document.getElementById('signupButton');
+        const signinButton = document.getElementById('signinButton');
+        const signupModal = document.getElementById('signupModal');
+        const signinModal = document.getElementById('signinModal');
+
+        signupButton.addEventListener('click', () => {
+            hideAllSections();
+            signupModal.classList.remove('hidden');
+        });
+
+        signinButton.addEventListener('click', async () => {
+            hideAllSections();
+            signinModal.classList.remove('hidden');
+        });
+
+        document.getElementById('signinForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signinEmail').value;
+            const password = document.getElementById('signinPassword').value;
+
+            const response = await fetch('/signin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            const result = await response.json();
+            alert(result.message || result.error);
+            
+            if (response.ok) {
+                // Show the "My Profile" button upon successful sign-in
+                document.getElementById('profileButton').classList.remove('hidden');
+                signinModal.classList.add('hidden');
+            }
+        });
+
+        const myRecipesButton = document.getElementById('myRecipesButton');
+        const myRecipes = document.getElementById('myRecipes');
+
+        myRecipesButton.addEventListener('click', () => {
+            myRecipes.classList.toggle('hidden');
         });
     </script>
 </body>
