@@ -1042,12 +1042,14 @@
                     <span class="close">&times;</span>
                     <h2>${recipe.name}</h2>
                     <div class="recipe-actions">
-                        <button class="like-button">❤️ Like</button>
-                        <button class="want-to-try-button">🔖 Want to Try</button>
+                        <button onclick="likeRecipe('${recipe.recipe_id}')" class="like-button">❤️ Like</button>
+                        <button onclick="wantToTryRecipe('${recipe.recipe_id}')" class="want-to-try-button">🔖 Want to Try</button>
                     </div>
                     <h3>Ingredients:</h3>
                     <ul>
-                        ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
+                        ${Array.isArray(recipe.ingredients) 
+                            ? recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')
+                            : `<li>${recipe.ingredients}</li>`}
                     </ul>
                     <h3>Instructions:</h3>
                     <p>${recipe.instructions}</p>
@@ -1058,13 +1060,6 @@
                 </div>
             `;
             document.body.appendChild(modal);
-
-            // Add event listeners after the modal is created
-            const likeButton = modal.querySelector('.like-button');
-            const wantToTryButton = modal.querySelector('.want-to-try-button');
-            
-            likeButton.addEventListener('click', () => likeRecipe(recipe.recipe_id));
-            wantToTryButton.addEventListener('click', () => wantToTryRecipe(recipe.recipe_id));
 
             const closeBtn = modal.querySelector('.close');
             closeBtn.onclick = () => modal.remove();
@@ -1250,65 +1245,73 @@
         }
 
         function displayRecipes(recipes) {
-            const recipeGrid = document.getElementById('recipeGrid');
-            recipeGrid.innerHTML = '';
-
+            const recipePosts = document.getElementById('recipePosts');
+            recipePosts.innerHTML = '';
+            
             recipes.forEach(recipe => {
-                const recipeCard = document.createElement('div');
-                recipeCard.className = 'recipe-card';
-                recipeCard.innerHTML = `
-                    <img src="${recipe.image_path || '/static/default-recipe.jpg'}" 
-                         alt="${recipe.name}"
-                         onerror="this.src='/static/default-recipe.jpg'">
-                    <h3>${recipe.name}</h3>
-                    <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
-                    <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
-                    <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
-                    <button onclick="showRecipeDetails(${JSON.stringify(recipe).replace(/"/g, '&quot;')})">
-                        View Details
-                    </button>
+                const post = document.createElement('div');
+                post.className = 'recipe-post';
+                post.innerHTML = `
+                    <img src="${recipe.image_path || '/static/default-recipe.jpg'}" alt="${recipe.name}">
+                    <div class="recipe-post-content">
+                        <h3>${recipe.name}</h3>
+                        <p>${recipe.cuisine ? `Cuisine: ${recipe.cuisine}` : ''}</p>
+                        <p>${recipe.difficulty ? `Difficulty: ${recipe.difficulty}` : ''}</p>
+                        <p>${recipe.time ? `Time: ${recipe.time} minutes` : ''}</p>
+                        <button onclick="viewRecipeDetails(${JSON.stringify(recipe).replace(/"/g, '&quot;')})">View Details</button>
+                    </div>
                 `;
-                recipeGrid.appendChild(recipeCard);
+                recipePosts.appendChild(post);
             });
         }
 
-        function showRecipeDetails(recipe) {
-            const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.innerHTML = `
-                <div class="modal-content">
-                    <span class="close">&times;</span>
-                    <h2>${recipe.name}</h2>
-                    <div class="recipe-actions">
-                        <button class="like-button">️ Like</button>
-                        <button class="want-to-try-button">🔖 Want to Try</button>
+        async function viewRecipeDetails(recipe) {
+            try {
+                // Create and show modal directly with the recipe data we already have
+                const modal = document.createElement('div');
+                modal.className = 'modal';
+                modal.style.display = 'block'; // Make sure modal is visible
+                
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <span class="close">&times;</span>
+                        <h2>${recipe.name}</h2>
+                        <div class="recipe-actions">
+                            <button onclick="likeRecipe('${recipe.recipe_id}')" class="like-button">❤️ Like</button>
+                            <button onclick="wantToTryRecipe('${recipe.recipe_id}')" class="want-to-try-button">🔖 Want to Try</button>
+                        </div>
+                        <h3>Ingredients:</h3>
+                        <ul>
+                            ${Array.isArray(recipe.ingredients) 
+                                ? recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')
+                                : `<li>${recipe.ingredients}</li>`}
+                        </ul>
+                        <h3>Instructions:</h3>
+                        <p>${recipe.instructions || 'No instructions available'}</p>
+                        <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
+                        <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
+                        <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
+                        <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
                     </div>
-                    <h3>Ingredients:</h3>
-                    <ul>
-                        ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
-                    </ul>
-                    <h3>Instructions:</h3>
-                    <p>${recipe.instructions}</p>
-                    <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
-                    <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
-                    <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
-                    <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
-                </div>
-            `;
-            document.body.appendChild(modal);
+                `;
+                
+                document.body.appendChild(modal);
 
-            // Add event listeners after the modal is created
-            const likeButton = modal.querySelector('.like-button');
-            const wantToTryButton = modal.querySelector('.want-to-try-button');
-            
-            likeButton.addEventListener('click', () => likeRecipe(recipe.recipe_id));
-            wantToTryButton.addEventListener('click', () => wantToTryRecipe(recipe.recipe_id));
-
-            const closeBtn = modal.querySelector('.close');
-            closeBtn.onclick = () => modal.remove();
-            window.onclick = (event) => {
-                if (event.target === modal) modal.remove();
-            };
+                // Add event listeners for closing the modal
+                const closeBtn = modal.querySelector('.close');
+                closeBtn.onclick = () => {
+                    modal.remove();
+                };
+                
+                window.onclick = (event) => {
+                    if (event.target === modal) {
+                        modal.remove();
+                    }
+                };
+            } catch (error) {
+                console.error('Error showing recipe details:', error);
+                alert('Error loading recipe details');
+            }
         }
 
         // Add search and filter functionality
