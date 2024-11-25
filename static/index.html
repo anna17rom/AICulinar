@@ -415,13 +415,13 @@
         }
 
         .modal {
-            display: block;
+            display: none;
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.5);
+            background-color: rgba(0, 0, 0, 0.5);
             z-index: 1000;
         }
 
@@ -429,9 +429,9 @@
             background-color: white;
             margin: 15% auto;
             padding: 20px;
-            border-radius: 8px;
             width: 80%;
-            max-width: 600px;
+            max-width: 500px;
+            border-radius: 5px;
             position: relative;
         }
 
@@ -441,6 +441,10 @@
             top: 10px;
             font-size: 24px;
             cursor: pointer;
+        }
+
+        .modal.show {
+            display: block;
         }
 
         #myRecipes {
@@ -473,12 +477,220 @@
         .recipe-list li:hover {
             background-color: #d5dbdb;
         }
+
+        #profileOptions {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #profileOptions.hidden {
+            display: none;
+        }
+
+        #recipeOptions {
+            display: flex;
+            flex-direction: column;
+            padding-left: 20px;
+        }
+
+        #recipeOptions.hidden {
+            display: none;
+        }
+
+        /* Style for all sidebar buttons */
+        #sidebar button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            color: white;
+        }
+
+        /* Menu button style */
+        #menuButton {
+            background-color: #3498db;
+        }
+
+        #menuButton:hover {
+            background-color: #2980b9;
+        }
+
+        /* Profile button style */
+        #profileButton {
+            background-color: #3498db;
+        }
+
+        #profileButton:hover {
+            background-color: #2980b9;
+        }
+
+        /* Style for My Recipes button */
+        #myRecipesButton {
+            background-color: #3498db !important;
+            color: white !important;
+            font-size: 16px !important;
+        }
+
+        #myRecipesButton:hover {
+            background-color: #2980b9 !important;
+        }
+
+        /* Style for recipe option buttons (Liked, Added, Want to Try) */
+        #recipeOptions button {
+            background-color: #3498db !important;
+            color: white !important;
+            font-size: 16px !important;
+            padding: 12px !important;
+            margin-bottom: 10px !important;
+        }
+
+        #recipeOptions button:hover {
+            background-color: #2980b9 !important;
+        }
+
+        /* Remove any conflicting styles */
+        #profileOptions button,
+        #menuOptions button {
+            background-color: #3498db;
+            color: white;
+        }
+
+        #profileOptions button:hover,
+        #menuOptions button:hover {
+            background-color: #2980b9;
+        }
+
+        /* Sign in/up buttons */
+        #signinButton,
+        #signupButton {
+            background-color: #3498db;
+        }
+
+        #signinButton:hover,
+        #signupButton:hover {
+            background-color: #2980b9;
+        }
+
+        .recipe-actions {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .like-button, .want-to-try-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .like-button {
+            background-color: #ff4757;
+            color: white;
+        }
+
+        .want-to-try-button {
+            background-color: #2ed573;
+            color: white;
+        }
+
+        .recipe-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .recipe-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .recipe-item img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .recipe-info {
+            flex: 1;
+        }
+
+        .recipe-section {
+            margin-bottom: 30px;
+        }
+
+        .recipe-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .recipe-section h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        /* Modal form styles */
+        .modal form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .modal input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .modal button[type="submit"] {
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .modal button[type="submit"]:hover {
+            background-color: #2980b9;
+        }
+
+        /* Ensure modals are on top */
+        .modal {
+            z-index: 1001;
+        }
+
+        .modal-content {
+            z-index: 1002;
+        }
     </style>
 </head>
 <body>
     <div id="sidebar">
-        <button id="profileButton" class="hidden">My Profile</button>
         <button id="menuButton">Menu</button>
+        <button id="profileButton" class="hidden">My Profile</button>
+        <div id="profileOptions" class="hidden">
+            <button id="myRecipesButton">My Recipes</button>
+            <div id="recipeOptions" class="hidden">
+                <button id="likedRecipesButton">Liked</button>
+                <button id="addedRecipesButton">Added</button>
+                <button id="wantToTryRecipesButton">Want to Try</button>
+            </div>
+        </div>
         <button id="signupButton">Sign Up</button>
         <button id="signinButton">Sign In</button>
         <div id="menuOptions" class="hidden">
@@ -574,26 +786,20 @@
 
         <div id="profileSection" class="hidden">
             <h2>My Profile</h2>
-            <button id="myRecipesButton">My Recipes</button>
-            <div id="myRecipes" class="hidden">
-                <h3>My Recipes</h3>
-                <div class="recipe-category">
-                    <h4>Added</h4>
-                    <ul id="addedRecipes" class="recipe-list">
-                        <!-- Added recipes will be listed here -->
-                    </ul>
+            <div id="recipeLists">
+                <div id="likedRecipesSection" class="recipe-section hidden">
+                    <h3>Liked Recipes</h3>
+                    <ul id="likedRecipes" class="recipe-list"></ul>
                 </div>
-                <div class="recipe-category">
-                    <h4>Liked</h4>
-                    <ul id="likedRecipes" class="recipe-list">
-                        <!-- Liked recipes will be listed here -->
-                    </ul>
+                
+                <div id="addedRecipesSection" class="recipe-section hidden">
+                    <h3>Added Recipes</h3>
+                    <ul id="addedRecipes" class="recipe-list"></ul>
                 </div>
-                <div class="recipe-category">
-                    <h4>Want to Try</h4>
-                    <ul id="wantToTryRecipes" class="recipe-list">
-                        <!-- Recipes to try will be listed here -->
-                    </ul>
+                
+                <div id="wantToTryRecipesSection" class="recipe-section hidden">
+                    <h3>Want to Try Recipes</h3>
+                    <ul id="want_to_tryRecipes" class="recipe-list"></ul>
                 </div>
             </div>
         </div>
@@ -604,33 +810,28 @@
         <span class="toggle-icon">◀</span>
     </button>
 
-    <div id="signupModal" class="hidden">
-        <h2>Sign Up</h2>
-        <form id="signupForm">
-            <label for="signupName">Name:</label>
-            <input type="text" id="signupName" required>
-            
-            <label for="signupEmail">Email:</label>
-            <input type="email" id="signupEmail" required>
-            
-            <label for="signupPassword">Password:</label>
-            <input type="password" id="signupPassword" required>
-            
-            <button type="submit">Sign Up</button>
-        </form>
+    <div id="signinModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Sign In</h2>
+            <form id="signinForm">
+                <input type="email" id="signinEmail" placeholder="Email" required>
+                <input type="password" id="signinPassword" placeholder="Password" required>
+                <button type="submit">Sign In</button>
+            </form>
+        </div>
     </div>
 
-    <div id="signinModal" class="hidden">
-        <h2>Sign In</h2>
-        <form id="signinForm">
-            <label for="signinEmail">Email:</label>
-            <input type="email" id="signinEmail" required>
-            
-            <label for="signinPassword">Password:</label>
-            <input type="password" id="signinPassword" required>
-            
-            <button type="submit">Sign In</button>
-        </form>
+    <div id="signupModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Sign Up</h2>
+            <form id="signupForm">
+                <input type="email" id="signupEmail" placeholder="Email" required>
+                <input type="password" id="signupPassword" placeholder="Password" required>
+                <button type="submit">Sign Up</button>
+            </form>
+        </div>
     </div>
 
     <script>
@@ -643,6 +844,8 @@
         const foodTinderButton = document.getElementById('foodTinderButton');
         const aiCulinarButton = document.getElementById('aiCulinarButton');
         const profileButton = document.getElementById('profileButton');
+        const profileOptions = document.getElementById('profileOptions');
+
 
         const addRecipeSection = document.getElementById('addRecipeSection');
         const viewRecipesSection = document.getElementById('viewRecipesSection');
@@ -653,18 +856,31 @@
         const profileSection = document.getElementById('profileSection');
 
         function hideAllSections() {
-            // Modify the existing hideAllSections function to include mainSection
-            mainSection.classList.add('hidden');
-            addRecipeSection.classList.add('hidden');
-            viewRecipesSection.classList.add('hidden');
-            shoppingListSection.classList.add('hidden');
-            calorieCalculatorSection.classList.add('hidden');
-            foodTinderSection.classList.add('hidden');
-            aiCulinarSection.classList.add('hidden');
-            profileSection.classList.add('hidden');
+            const sections = [
+                'mainSection',
+                'addRecipeSection',
+                'viewRecipesSection',
+                'shoppingListSection',
+                'calorieCalculatorSection',
+                'foodTinderSection',
+                'aiCulinarSection',
+                'profileSection',
+                'likedRecipesSection',
+                'addedRecipesSection',
+                'wantToTryRecipesSection'
+            ];
+            
+            sections.forEach(section => {
+                const element = document.getElementById(section);
+                if (element) {
+                    element.classList.add('hidden');
+                }
+            });
         }
 
         menuButton.addEventListener('click', () => {
+            hideAllSections();
+            mainSection.classList.remove('hidden');
             menuOptions.classList.toggle('hidden');
         });
 
@@ -689,22 +905,65 @@
         calorieCalculatorButton.addEventListener('click', () => {
             hideAllSections();
             calorieCalculatorSection.classList.remove('hidden');
+            menuOptions.classList.add('hidden');
         });
 
         foodTinderButton.addEventListener('click', () => {
             hideAllSections();
             foodTinderSection.classList.remove('hidden');
+            menuOptions.classList.add('hidden');
         });
 
         aiCulinarButton.addEventListener('click', () => {
             hideAllSections();
             aiCulinarSection.classList.remove('hidden');
+            menuOptions.classList.add('hidden');
         });
 
         profileButton.addEventListener('click', () => {
             hideAllSections();
             profileSection.classList.remove('hidden');
+            profileOptions.classList.toggle('hidden');
+            menuOptions.classList.add('hidden'); // Hide menu options when profile is clicked
         });
+
+        const myRecipesButton = document.getElementById('myRecipesButton');
+        myRecipesButton.addEventListener('click', () => {
+            const recipeOptions = document.getElementById('recipeOptions');
+            recipeOptions.classList.toggle('hidden');
+        });
+
+        const likedRecipesButton = document.getElementById('likedRecipesButton');
+        const addedRecipesButton = document.getElementById('addedRecipesButton');
+        const wantToTryRecipesButton = document.getElementById('wantToTryRecipesButton');
+
+        likedRecipesButton.addEventListener('click', () => {
+            hideAllRecipeSections();
+            document.getElementById('likedRecipesSection').classList.remove('hidden');
+            loadUserRecipes('liked');
+        });
+
+        addedRecipesButton.addEventListener('click', () => {
+            hideAllRecipeSections();
+            document.getElementById('addedRecipesSection').classList.remove('hidden');
+            loadUserRecipes('added');
+        });
+
+        wantToTryRecipesButton.addEventListener('click', () => {
+            hideAllRecipeSections();
+            document.getElementById('wantToTryRecipesSection').classList.remove('hidden');
+            loadUserRecipes('want_to_try');
+        });
+
+        function hideAllRecipeSections() {
+            const sections = ['likedRecipesSection', 'addedRecipesSection', 'wantToTryRecipesSection'];
+            sections.forEach(section => {
+                const element = document.getElementById(section);
+                if (element) {
+                    element.classList.add('hidden');
+                }
+            });
+        }
 
         // Recipe Form Handling
         document.getElementById('recipeForm').addEventListener('submit', async (e) => {
@@ -776,19 +1035,42 @@
         }
 
         function showRecipeDetails(recipe) {
-            const recipeDetails = document.getElementById('recipeDetails');
-            const recipeName = document.getElementById('recipeName');
-            const recipeImage = document.getElementById('recipeImage');
-            const recipeIngredients = document.getElementById('recipeIngredients');
-            const recipeInstructions = document.getElementById('recipeInstructions');
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.innerHTML = `
+                <div class="modal-content">
+                    <span class="close">&times;</span>
+                    <h2>${recipe.name}</h2>
+                    <div class="recipe-actions">
+                        <button class="like-button">❤️ Like</button>
+                        <button class="want-to-try-button">🔖 Want to Try</button>
+                    </div>
+                    <h3>Ingredients:</h3>
+                    <ul>
+                        ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
+                    </ul>
+                    <h3>Instructions:</h3>
+                    <p>${recipe.instructions}</p>
+                    <p><strong>Cuisine:</strong> ${recipe.cuisine || 'Not specified'}</p>
+                    <p><strong>Difficulty:</strong> ${recipe.difficulty || 'Not specified'}</p>
+                    <p><strong>Time:</strong> ${recipe.time || 'Not specified'} minutes</p>
+                    <p><strong>Calories:</strong> ${recipe.calories || 'Not specified'}</p>
+                </div>
+            `;
+            document.body.appendChild(modal);
 
-            recipeName.textContent = recipe.name;
-            recipeImage.src = recipe.photo_url || '';
-            recipeImage.style.display = recipe.photo_url ? 'block' : 'none';
-            recipeIngredients.textContent = recipe.ingredients;
-            recipeInstructions.textContent = recipe.instructions;
+            // Add event listeners after the modal is created
+            const likeButton = modal.querySelector('.like-button');
+            const wantToTryButton = modal.querySelector('.want-to-try-button');
+            
+            likeButton.addEventListener('click', () => likeRecipe(recipe.recipe_id));
+            wantToTryButton.addEventListener('click', () => wantToTryRecipe(recipe.recipe_id));
 
-            recipeDetails.classList.remove('hidden');
+            const closeBtn = modal.querySelector('.close');
+            closeBtn.onclick = () => modal.remove();
+            window.onclick = (event) => {
+                if (event.target === modal) modal.remove();
+            };
         }
 
         // Shopping List Functionality
@@ -934,7 +1216,8 @@
 
         // Add home button functionality
         document.addEventListener('DOMContentLoaded', () => {
-            loadMainPage(); // Load main page by default
+            hideAllSections();
+            document.getElementById('mainSection').classList.remove('hidden');
         });
 
         // Add event listener for search input
@@ -996,6 +1279,10 @@
                 <div class="modal-content">
                     <span class="close">&times;</span>
                     <h2>${recipe.name}</h2>
+                    <div class="recipe-actions">
+                        <button class="like-button">️ Like</button>
+                        <button class="want-to-try-button">🔖 Want to Try</button>
+                    </div>
                     <h3>Ingredients:</h3>
                     <ul>
                         ${recipe.ingredients.map(ing => `<li>${ing}</li>`).join('')}
@@ -1009,6 +1296,13 @@
                 </div>
             `;
             document.body.appendChild(modal);
+
+            // Add event listeners after the modal is created
+            const likeButton = modal.querySelector('.like-button');
+            const wantToTryButton = modal.querySelector('.want-to-try-button');
+            
+            likeButton.addEventListener('click', () => likeRecipe(recipe.recipe_id));
+            wantToTryButton.addEventListener('click', () => wantToTryRecipe(recipe.recipe_id));
 
             const closeBtn = modal.querySelector('.close');
             closeBtn.onclick = () => modal.remove();
@@ -1083,71 +1377,268 @@
             document.getElementById('difficultyFilter').addEventListener('change', filterRecipes);
         });
 
-        document.getElementById('signupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('signupName').value;
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
+        // Global variable to store current user's email
+        let currentUserEmail = null;
 
-            const response = await fetch('/signup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name, email, password })
+        // Get modal elements
+        const signinModal = document.getElementById('signinModal');
+        const signupModal = document.getElementById('signupModal');
+        const signupButton = document.getElementById('signupButton');
+        const signinButton = document.getElementById('signinButton');
+
+        // Event listeners for opening modals
+        signupButton.addEventListener('click', () => {
+            signupModal.classList.add('show');
+        });
+
+        signinButton.addEventListener('click', () => {
+            signinModal.classList.add('show');
+        });
+
+        // Close buttons in modals
+        const closeButtons = document.getElementsByClassName('close');
+        Array.from(closeButtons).forEach(button => {
+            button.addEventListener('click', () => {
+                signinModal.classList.remove('show');
+                signupModal.classList.remove('show');
             });
+        });
 
-            const result = await response.json();
-            alert(result.message || result.error);
-            if (response.ok) {
-                document.getElementById('signupModal').classList.add('hidden');
+        // Close modal when clicking outside
+        window.addEventListener('click', (event) => {
+            if (event.target === signinModal) {
+                signinModal.classList.remove('show');
+            }
+            if (event.target === signupModal) {
+                signupModal.classList.remove('show');
             }
         });
 
-        const signupButton = document.getElementById('signupButton');
-        const signinButton = document.getElementById('signinButton');
-        const signupModal = document.getElementById('signupModal');
-        const signinModal = document.getElementById('signinModal');
-
-        signupButton.addEventListener('click', () => {
-            hideAllSections();
-            signupModal.classList.remove('hidden');
-        });
-
-        signinButton.addEventListener('click', async () => {
-            hideAllSections();
-            signinModal.classList.remove('hidden');
-        });
-
+        // Handle sign in
         document.getElementById('signinForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('signinEmail').value;
             const password = document.getElementById('signinPassword').value;
 
-            const response = await fetch('/signin', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ email, password })
-            });
+            try {
+                const response = await fetch('/signin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
 
-            const result = await response.json();
-            alert(result.message || result.error);
-            
-            if (response.ok) {
-                // Show the "My Profile" button upon successful sign-in
-                document.getElementById('profileButton').classList.remove('hidden');
-                signinModal.classList.add('hidden');
+                const result = await response.json();
+                
+                if (response.ok) {
+                    currentUserEmail = email;
+                    document.getElementById('profileButton').classList.remove('hidden');
+                    signinModal.classList.remove('show');
+                    signupButton.classList.add('hidden');
+                    signinButton.classList.add('hidden');
+                    alert('Signed in successfully!');
+                } else {
+                    alert(result.error || 'Sign in failed');
+                }
+            } catch (error) {
+                alert('Error signing in: ' + error.message);
             }
         });
 
-        const myRecipesButton = document.getElementById('myRecipesButton');
-        const myRecipes = document.getElementById('myRecipes');
+        // Handle sign up
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
 
-        myRecipesButton.addEventListener('click', () => {
-            myRecipes.classList.toggle('hidden');
+            try {
+                const response = await fetch('/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    signupModal.classList.remove('show');
+                    alert('Signed up successfully! Please sign in.');
+                } else {
+                    alert(result.error || 'Sign up failed');
+                }
+            } catch (error) {
+                alert('Error signing up: ' + error.message);
+            }
         });
+
+        // Add these functions to handle recipe interactions
+        async function likeRecipe(recipeId) {
+            if (!currentUserEmail) {
+                alert('Please sign in to like recipes');
+                return;
+            }
+
+            try {
+                const response = await fetch('/like_recipe/' + recipeId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        recipe_id: recipeId,
+                        user_email: currentUserEmail
+                    })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Recipe liked successfully!');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                alert('Error liking recipe: ' + error.message);
+            }
+        }
+
+        async function wantToTryRecipe(recipeId) {
+            if (!currentUserEmail) {
+                alert('Please sign in to add recipes to your want-to-try list');
+                return;
+            }
+
+            try {
+                const response = await fetch('/want_to_try_recipe/' + recipeId, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        recipe_id: recipeId,
+                        user_email: currentUserEmail
+                    })
+                });
+                
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Recipe added to want to try list!');
+                } else {
+                    throw new Error(result.error);
+                }
+            } catch (error) {
+                alert('Error adding recipe to want to try list: ' + error.message);
+            }
+        }
+
+        // Add functions to load user's recipes
+        async function loadLikedRecipes() {
+            await loadUserRecipes('liked');
+        }
+
+        async function loadAddedRecipes() {
+            await loadUserRecipes('added');
+        }
+
+        async function loadWantToTryRecipes() {
+            await loadUserRecipes('want_to_try');
+        }
+
+        async function loadUserRecipes(type) {
+            try {
+                const response = await fetch(`/get_user_recipes/${type}?user_email=${currentUserEmail}`);
+                if (!response.ok) throw new Error('Failed to fetch recipes');
+                
+                const recipes = await response.json();
+                const recipeList = document.getElementById(`${type}Recipes`);
+                if (!recipeList) {
+                    console.error(`Element with id "${type}Recipes" not found`);
+                    return;
+                }
+                
+                recipeList.innerHTML = '';
+                
+                if (recipes.length === 0) {
+                    recipeList.innerHTML = '<li class="no-recipes">No recipes found</li>';
+                    return;
+                }
+                
+                recipes.forEach(recipe => {
+                    const li = document.createElement('li');
+                    li.className = 'recipe-item';
+                    li.innerHTML = `
+                        <img src="${recipe.image_path || '/static/default-recipe.jpg'}" alt="${recipe.name}">
+                        <div class="recipe-info">
+                            <h3>${recipe.name}</h3>
+                            <p>${recipe.instructions ? recipe.instructions.substring(0, 100) + '...' : 'No instructions available'}</p>
+                        </div>
+                    `;
+                    li.addEventListener('click', () => showRecipeDetails(recipe));
+                    recipeList.appendChild(li);
+                });
+            } catch (error) {
+                console.error(`Error loading ${type} recipes:`, error);
+                alert(`Error loading ${type} recipes`);
+            }
+        }
+
+        // Add CSS for the new buttons and recipe items
+        const style = document.createElement('style');
+        style.textContent = `
+            .recipe-actions {
+                display: flex;
+                gap: 10px;
+                margin: 15px 0;
+            }
+
+            .like-button, .want-to-try-button {
+                padding: 8px 16px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                transition: background-color 0.3s;
+            }
+
+            .like-button {
+                background-color: #ff4757;
+                color: white;
+            }
+
+            .want-to-try-button {
+                background-color: #2ed573;
+                color: white;
+            }
+
+            .recipe-item {
+                display: flex;
+                gap: 15px;
+                padding: 15px;
+                background: white;
+                border-radius: 8px;
+                margin-bottom: 10px;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+
+            .recipe-item:hover {
+                transform: translateY(-2px);
+            }
+
+            .recipe-item img {
+                width: 100px;
+                height: 100px;
+                object-fit: cover;
+                border-radius: 4px;
+            }
+
+            .recipe-info {
+                flex: 1;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

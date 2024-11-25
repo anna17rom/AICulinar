@@ -137,26 +137,23 @@ def index():
 def get_recipes():
     try:
         with driver.session() as session:
-            query = """
-            MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
-            WITH r, collect(i.name) as ingredients
-            RETURN 
-                id(r) as id,
-                r.name as name,
-                r.instructions as instructions,
-                r.calories as calories,
-                r.time as time,
-                r.difficulty as difficulty,
-                r.cuisine as cuisine,
-                r.image_path as image_path,
-                ingredients
-            ORDER BY r.name
-            """
-            result = session.run(query)
+            result = session.run("""
+                MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(i.name) as ingredients
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.calories as calories,
+                    r.time as time,
+                    r.difficulty as difficulty,
+                    r.cuisine as cuisine,
+                    r.image_path as image_path,
+                    ingredients
+            """)
             recipes = [dict(record) for record in result]
             return jsonify(recipes), 200
     except Exception as e:
-        print(f"Error getting recipes: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def import_recipes_from_spoonacular(limit: int = 100):
@@ -430,6 +427,88 @@ def signin():
 
     # Return success and a flag to indicate sign-in success
     return jsonify({"message": "Sign in successful", "signedIn": True}), 200
+
+# Add these new routes
+@app.route('/like_recipe/<recipe_id>', methods=['POST'])
+def like_recipe(recipe_id):
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                MERGE (u)-[l:LIKED]->(r)
+                RETURN r.name as recipe_name
+            """, {"email": user_email, "recipe_id": recipe_id})
+            
+            record = result.single()
+            if record:
+                return jsonify({"message": f"Recipe '{record['recipe_name']}' liked successfully"}), 200
+            return jsonify({"error": "Recipe or user not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/want_to_try_recipe/<recipe_id>', methods=['POST'])
+def want_to_try_recipe(recipe_id):
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                MERGE (u)-[w:WANTS_TO_TRY]->(r)
+                RETURN r.name as recipe_name
+            """, {"email": user_email, "recipe_id": recipe_id})
+            
+            record = result.single()
+            if record:
+                return jsonify({"message": f"Recipe '{record['recipe_name']}' added to want to try list"}), 200
+            return jsonify({"error": "Recipe or user not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_recipes/<type>', methods=['GET'])
+def get_user_recipes(type):
+    try:
+        user_email = request.args.get('user_email')
+        
+        relationship_type = {
+            'liked': 'LIKED',
+            'added': 'ADDED_RECIPE',
+            'want_to_try': 'WANTS_TO_TRY'
+        }.get(type)
+
+        if not relationship_type:
+            return jsonify({"error": "Invalid recipe type"}), 400
+
+        with driver.session() as session:
+            query = f"""
+            MATCH (u:User {{email: $email}})-[:{relationship_type}]->(r:Recipe)-[:CONTAINS]->(i:Ingredient)
+            WITH r, collect(i.name) as ingredients
+            RETURN 
+                r.recipe_id as id,
+                r.name as name,
+                r.instructions as instructions,
+                r.calories as calories,
+                r.time as time,
+                r.difficulty as difficulty,
+                r.cuisine as cuisine,
+                r.image_path as image_path,
+                ingredients
+            """
+            
+            result = session.run(query, {"email": user_email})
+            recipes = [dict(record) for record in result]
+            return jsonify(recipes), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
