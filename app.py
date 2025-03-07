@@ -12,6 +12,10 @@ import cloudinary.api
 from flask_mail import Mail, Message
 import uuid
 from werkzeug.security import generate_password_hash, check_password_hash
+import tensorflow as tf
+import json
+from PIL import Image
+import numpy as np
 
 load_dotenv()
 
@@ -27,13 +31,7 @@ SPOONACULAR_API_KEY = os.getenv("SPOONACULAR_API_KEY", "your_spoonacular_api_key
 SPOONACULAR_BASE_URL = "https://api.spoonacular.com/recipes"
 
 # Add these configurations after creating the Flask app
-UPLOAD_FOLDER = 'static/recipe_images'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Create upload folder if it doesn't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Configure Cloudinary with your credentials
 cloudinary.config(
@@ -43,16 +41,23 @@ cloudinary.config(
 )
 
 # Configure Flask-Mail
-app.config['MAIL_SERVER'] = 'smtp.example.com'  # Replace with your mail server
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'your_email@example.com'  # Your email
-app.config['MAIL_PASSWORD'] = 'your_password'  # Your email password
-app.config['MAIL_DEFAULT_SENDER'] = 'your_email@example.com'  # Default sender
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
 
 # User database (for demonstration purposes, use a real database in production)
 users = {}
+
+# Load your model
+model = tf.keras.models.load_model('product_model.h5')
+
+# Load class names
+with open('model_classes.json', 'r') as f:
+    class_names = json.load(f)
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -159,15 +164,27 @@ def get_recipes():
 def import_recipes_from_spoonacular(limit: int = 100):
     """Import recipes from Spoonacular API"""
     try:
+        # Add debug logging
+        print(f"Starting recipe import with API key: {SPOONACULAR_API_KEY}")
+        
         # Get random recipes from Spoonacular
         params = {
             "apiKey": SPOONACULAR_API_KEY,
             "number": limit,
             "addRecipeInformation": True,
         }
+        print(f"Requesting recipes from Spoonacular with params: {params}")
+        
         response = requests.get(f"{SPOONACULAR_BASE_URL}/random", params=params)
+        print(f"Spoonacular response status: {response.status_code}")
+        
+        if response.status_code != 200:
+            print(f"Error response from Spoonacular: {response.text}")
+            return False
+            
         recipes = response.json()["recipes"]
-
+        print(f"Retrieved {len(recipes)} recipes from Spoonacular")
+        
         with driver.session() as session:
             for recipe in recipes:
                 # Create Cypher query for each recipe
@@ -221,7 +238,10 @@ def import_recipes():
 def add_recipe():
     try:
         data = request.form
-        print("Received form data:", data)  # Debug log
+        user_email = data.get('user_email')
+        
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
         
         # Generate a unique recipe_id
         recipe_id = str(int(time.time()))
@@ -230,38 +250,21 @@ def add_recipe():
         image_path = None
         if 'image' in request.files:
             file = request.files['image']
-            print("Received file:", file.filename if file else "No file")  # Debug log
-            
             if file and file.filename and allowed_file(file.filename):
-                # Upload to Cloudinary
                 upload_result = cloudinary.uploader.upload(file)
-                image_path = upload_result['secure_url']  # Get the URL of the uploaded image
-                print(f"Image uploaded to Cloudinary: {image_path}")  # Debug log
-            else:
-                print("File not allowed or no file uploaded")  # Debug log
-                return jsonify({"error": "File type not allowed or no file uploaded"}), 400
+                image_path = upload_result['secure_url']
         
         with driver.session() as session:
-            # Create Cypher query for the new recipe
-            query = """
-            CREATE (r:Recipe {
-                recipe_id: $recipe_id,
-                name: $name,
-                instructions: $instructions,
-                difficulty: 'medium',
-                time: $time,
-                calories: $calories,
-                cuisine: 'Unknown',
-                image_path: $image_path
-            })
-            WITH r
-            UNWIND $ingredients as ingredient
-            MERGE (i:Ingredient {name: toLower(trim(ingredient))})
-            MERGE (r)-[:CONTAINS]->(i)
-            RETURN r
-            """
+            # First verify the user exists
+            user_check = session.run("""
+                MATCH (u:User {email: $email})
+                RETURN u
+            """, {"email": user_email}).single()
             
-            # Parse ingredients from the comma or newline separated string
+            if not user_check:
+                return jsonify({"error": "User not found"}), 404
+
+            # Parse ingredients
             ingredients_text = data.get('ingredients', '')
             ingredients_list = [
                 ing.strip() 
@@ -269,29 +272,46 @@ def add_recipe():
                 if ing.strip()
             ]
             
-            # Get optional fields with default values
-            time_required = int(data.get('time', 30))
-            calories = int(data.get('calories', 0))
-            
-            # Recipe data for the query
-            recipe_data = {
+            # Create recipe and relationships
+            result = session.run("""
+                CREATE (r:Recipe {
+                    recipe_id: $recipe_id,
+                    name: $name,
+                    instructions: $instructions,
+                    difficulty: 'medium',
+                    time: $time,
+                    calories: $calories,
+                    cuisine: $cuisine,
+                    image_path: $image_path
+                })
+                WITH r
+                MATCH (u:User {email: $user_email})
+                CREATE (u)-[:ADDED_RECIPE]->(r)
+                WITH r
+                UNWIND $ingredients as ingredient
+                MERGE (i:Ingredient {name: toLower(trim(ingredient))})
+                CREATE (r)-[:CONTAINS]->(i)
+                RETURN r
+            """, {
                 "recipe_id": recipe_id,
                 "name": data.get('name'),
                 "instructions": data.get('instructions'),
                 "ingredients": ingredients_list,
-                "image_path": image_path,  # This will be the Cloudinary URL
-                "time": time_required,
-                "calories": calories
-            }
+                "image_path": image_path,
+                "time": int(data.get('time', 30)),
+                "calories": int(data.get('calories', 0)),
+                "cuisine": data.get('cuisine', 'Unknown'),
+                "user_email": user_email
+            })
             
-            print("Executing query with data:", recipe_data)  # Debug log
-            session.run(query, recipe_data)
-            
-            return jsonify({
-                "message": "Recipe added successfully",
-                "recipe_id": recipe_id,
-                "image_path": image_path  # This will be the Cloudinary URL
-            }), 200
+            if result.single():
+                return jsonify({
+                    "message": "Recipe added successfully",
+                    "recipe_id": recipe_id,
+                    "image_path": image_path
+                }), 200
+            else:
+                return jsonify({"error": "Failed to create recipe"}), 500
             
     except Exception as e:
         print(f"Error adding recipe: {str(e)}")
@@ -340,11 +360,6 @@ def search_recipes():
         print(f"Error searching recipes: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Route to serve images from the static folder (if necessary)
-@app.route('/static/recipe_images/<filename>')
-def serve_image(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
 @app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
@@ -352,41 +367,53 @@ def signup():
     email = data.get('email')
     password = data.get('password')
 
+    # Input validation
+    if not all([name, email, password]):
+        return jsonify({"error": "All fields are required"}), 400
+
     # Check if the email already exists
-    with driver.session() as session:
-        existing_user = session.run("""
-            MATCH (u:User {email: $email})
-            RETURN u
-        """, {"email": email}).single()
-
-        if existing_user:
-            return jsonify({"error": "Email already registered"}), 400
-
-    # Create a unique verification token
-    token = str(uuid.uuid4())
-
-    # Store user in Neo4j
     try:
         with driver.session() as session:
-            hashed_password = generate_password_hash(password)
-            session.run("""
-                CREATE (u:User {name: $name, email: $email, password: $hashed_password, verified: false, token: $token})
+            existing_user = session.run("""
+                MATCH (u:User {email: $email})
+                RETURN u
+            """, {"email": email}).single()
+
+            if existing_user:
+                return jsonify({"error": "Email already registered"}), 400
+
+            # Create a unique verification token
+            token = str(uuid.uuid4())
+            
+            # Create user with proper Cypher syntax
+            result = session.run("""
+                CREATE (u:User {
+                    name: $name,
+                    email: $email,
+                    password: $password,
+                    verified: true,
+                    token: $token
+                })
+                RETURN u
             """, {
                 "name": name,
                 "email": email,
-                "hashed_password": hashed_password,
+                "password": generate_password_hash(password),
                 "token": token
             })
+
+            # Verify the user was created
+            if result.single():
+                return jsonify({
+                    "message": "User registered successfully",
+                    "success": True
+                }), 200
+            else:
+                return jsonify({"error": "Failed to create user"}), 500
+
     except Exception as e:
-        return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
-
-    # Send verification email
-    verification_link = f"http://localhost:5000/verify/{token}"
-    msg = Message("Verify Your Email", recipients=[email])
-    msg.body = f"Please click the link to verify your account: {verification_link}"
-    mail.send(msg)
-
-    return jsonify({"message": "Verification email sent"}), 200
+        print(f"Signup error: {str(e)}")  # Add debug logging
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/verify/<token>', methods=['GET'])
 def verify(token):
@@ -436,6 +463,15 @@ def like_recipe(recipe_id):
         user_email = data.get('user_email')
 
         with driver.session() as session:
+            # First verify the recipe exists
+            recipe_check = session.run("""
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                RETURN r
+            """, {"recipe_id": recipe_id}).single()
+            
+            if not recipe_check:
+                return jsonify({"error": "Recipe not found"}), 404
+
             result = session.run("""
                 MATCH (u:User {email: $email})
                 MATCH (r:Recipe {recipe_id: $recipe_id})
@@ -446,9 +482,10 @@ def like_recipe(recipe_id):
             record = result.single()
             if record:
                 return jsonify({"message": f"Recipe '{record['recipe_name']}' liked successfully"}), 200
-            return jsonify({"error": "Recipe or user not found"}), 404
+            return jsonify({"error": "User not found"}), 404
 
     except Exception as e:
+        print(f"Error liking recipe: {str(e)}")  # Add debug logging
         return jsonify({"error": str(e)}), 500
 
 @app.route('/want_to_try_recipe/<recipe_id>', methods=['POST'])
@@ -458,6 +495,16 @@ def want_to_try_recipe(recipe_id):
         user_email = data.get('user_email')
 
         with driver.session() as session:
+            # First, check if the relationship already exists
+            check_result = session.run("""
+                MATCH (u:User {email: $email})-[w:WANTS_TO_TRY]->(r:Recipe {recipe_id: $recipe_id})
+                RETURN w
+            """, {"email": user_email, "recipe_id": recipe_id})
+            
+            if check_result.single():
+                return jsonify({"message": "Recipe already in Want to Try list"}), 200
+
+            # If not, create the relationship
             result = session.run("""
                 MATCH (u:User {email: $email})
                 MATCH (r:Recipe {recipe_id: $recipe_id})
@@ -467,32 +514,551 @@ def want_to_try_recipe(recipe_id):
             
             record = result.single()
             if record:
-                return jsonify({"message": f"Recipe '{record['recipe_name']}' added to want to try list"}), 200
+                return jsonify({"message": f"Recipe '{record['recipe_name']}' added to Want to Try list"}), 200
             return jsonify({"error": "Recipe or user not found"}), 404
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/get_user_recipes/<type>', methods=['GET'])
+@app.route('/get_user_recipes/<type>')
 def get_user_recipes(type):
     try:
         user_email = request.args.get('user_email')
-        
-        relationship_type = {
-            'liked': 'LIKED',
-            'added': 'ADDED_RECIPE',
-            'want_to_try': 'WANTS_TO_TRY'
-        }.get(type)
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
 
+        # Map the type parameter to the correct relationship type
+        relationship_map = {
+            'liked': 'LIKED',
+            'cooked': 'COOKED',
+            'want_to_try': 'WANTS_TO_TRY',
+            'added': 'ADDED_RECIPE'
+        }
+        
+        relationship_type = relationship_map.get(type)
         if not relationship_type:
             return jsonify({"error": "Invalid recipe type"}), 400
 
         with driver.session() as session:
-            query = f"""
-            MATCH (u:User {{email: $email}})-[:{relationship_type}]->(r:Recipe)-[:CONTAINS]->(i:Ingredient)
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:""" + relationship_type + """]->(r:Recipe)
+                OPTIONAL MATCH (r)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(DISTINCT i.name) as ingredients
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    ingredients
+            """, {"email": user_email})
+            
+            recipes = [dict(record) for record in result]
+            print(f"Found {len(recipes)} {type} recipes for user {user_email}")  # Debug log
+            return jsonify(recipes), 200
+
+    except Exception as e:
+        print(f"Error getting {type} recipes: {str(e)}")  # Debug log
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/cooked_recipe/<recipe_id>', methods=['POST'])
+def cooked_recipe(recipe_id):
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+
+        with driver.session() as session:
+            # First verify the recipe exists
+            recipe_check = session.run("""
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                RETURN r
+            """, {"recipe_id": recipe_id}).single()
+            
+            if not recipe_check:
+                return jsonify({"error": "Recipe not found"}), 404
+
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                MERGE (u)-[c:COOKED]->(r)
+                RETURN r.name as recipe_name
+            """, {"email": user_email, "recipe_id": recipe_id})
+            
+            record = result.single()
+            if record:
+                return jsonify({"message": f"Recipe '{record['recipe_name']}' marked as cooked"}), 200
+            return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        print(f"Error marking recipe as cooked: {str(e)}")  # Add debug logging
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/get_user_profile')
+def get_user_profile():
+    try:
+        user_email = request.args.get('user_email')
+        
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                RETURN u.name as name,
+                       u.age as age,
+                       u.height as height,
+                       u.weight as weight,
+                       u.goal as goal
+            """, {"email": user_email})
+            
+            user_data = result.single()
+            if user_data:
+                return jsonify(dict(user_data)), 200
+            return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_user_profile', methods=['POST'])
+def update_user_profile():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                SET u.name = $name,
+                    u.age = $age,
+                    u.height = $height,
+                    u.weight = $weight,
+                    u.goal = $goal
+                RETURN u
+            """, {
+                "email": user_email,
+                "name": data.get('name'),
+                "age": int(data.get('age')),
+                "height": float(data.get('height')),
+                "weight": float(data.get('weight')),
+                "goal": data.get('goal')
+            })
+            
+            if result.single():
+                return jsonify({"message": "Profile updated successfully"}), 200
+            return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+def preprocess_image(image_path):
+    try:
+        # Open and convert image to RGB (in case it's RGBA or grayscale)
+        img = Image.open(image_path).convert('RGB')
+        
+        # Resize the image to match model's expected input size
+        img = img.resize((299, 299))
+        
+        # Convert to numpy array and scale pixels
+        img_array = np.array(img)
+        img_array = img_array.astype('float32')
+        img_array = img_array / 255.0  # Normalize pixel values to [0,1]
+        
+        # Add batch dimension
+        img_array = np.expand_dims(img_array, axis=0)
+        
+        print(f"Preprocessed image shape: {img_array.shape}")  # Debug info
+        print(f"Input shape: {img_array.shape}")
+        print(f"Input value range: {img_array.min()} to {img_array.max()}")
+        return img_array
+        
+    except Exception as e:
+        print(f"Error in preprocessing: {str(e)}")
+        raise e
+
+@app.route('/analyze_image', methods=['POST'])
+def analyze_image():
+    if 'image' not in request.files:
+        return jsonify({"error": "No image uploaded"}), 400
+
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        try:
+            # Upload to Cloudinary first
+            upload_result = cloudinary.uploader.upload(file)
+            
+            # Download the image temporarily for analysis
+            response = requests.get(upload_result['secure_url'])
+            temp_path = f"/tmp/{secure_filename(file.filename)}"
+            
+            with open(temp_path, 'wb') as f:
+                f.write(response.content)
+
+            # Analyze the image
+            image_array = preprocess_image(temp_path)
+            predictions = model.predict(image_array)
+            
+            # Clean up temporary file
+            os.remove(temp_path)
+            
+            # Process results as before
+            top_indices = np.argsort(predictions[0])[-3:][::-1]
+            results = []
+            
+            for idx in top_indices:
+                results.append({
+                    'product': class_names[idx],
+                    'probability': float(predictions[0][idx])
+                })
+            
+            return jsonify({
+                "message": "Top predictions:",
+                "predictions": results
+            }), 200
+
+        except Exception as e:
+            print(f"Error during image analysis: {str(e)}")
+            return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+
+    return jsonify({"error": "File type not allowed"}), 400
+
+def decode_predictions(predictions):
+    # Assuming predictions is a list of probabilities
+    predicted_index = predictions.argmax()
+    return class_names[predicted_index]
+
+@app.route('/rate_recipe/<recipe_id>', methods=['POST'])
+def rate_recipe(recipe_id):
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        rating = int(data.get('rating'))
+
+        with driver.session() as session:
+            # Ensure the user and recipe exist
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                MERGE (u)-[ra:RATED]->(r)
+                SET ra.rating = $rating
+                RETURN r.name as recipe_name
+            """, {"email": user_email, "recipe_id": recipe_id, "rating": rating})
+            
+            record = result.single()
+            if record:
+                return jsonify({"message": f"Recipe '{record['recipe_name']}' rated successfully"}), 200
+            return jsonify({"error": "Recipe or user not found"}), 404
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_recipes/authored')
+def get_authored_recipes():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Debug print
+            print(f"Fetching authored recipes for user: {user_email}")
+            
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:AUTHORED]->(r:Recipe)
+                OPTIONAL MATCH (r)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(DISTINCT i.name) as ingredients
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    ingredients
+            """, {"email": user_email})
+            
+            recipes = [dict(record) for record in result]
+            print(f"Found {len(recipes)} authored recipes")  # Debug print
+            return jsonify(recipes), 200
+
+    except Exception as e:
+        print(f"Error getting authored recipes: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_user_preferences', methods=['POST'])
+def update_user_preferences():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        
+        # Process allergies
+        allergies = data.get('allergies', [])
+        if data.get('other_allergies'):
+            allergies.extend([a.strip() for a in data['other_allergies'].split(',')])
+            
+        # Process cuisines
+        cuisines = data.get('cuisines', [])
+        if data.get('other_cuisines'):
+            cuisines.extend([c.strip() for c in data['other_cuisines'].split(',')])
+            
+        # Process food types
+        food_types = data.get('food_types', [])
+        if data.get('other_food_types'):
+            food_types.extend([f.strip() for f in data['other_food_types'].split(',')])
+            
+        # Process drinks
+        drinks = data.get('drinks', [])
+        if data.get('other_drinks'):
+            drinks.extend([d.strip() for d in data['other_drinks'].split(',')])
+            
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                SET u.has_allergies = $has_allergies,
+                    u.allergies = $allergies,
+                    u.diet = $diet,
+                    u.other_diet = $other_diet,
+                    u.meal_time = $meal_time,
+                    u.cuisines = $cuisines,
+                    u.food_types = $food_types,
+                    u.spice_preference = $spice_preference,
+                    u.sweetness_preference = $sweetness_preference,
+                    u.disliked_foods = $disliked_foods,
+                    u.prep_time = $prep_time,
+                    u.drinks = $drinks,
+                    u.dietary_goal = $dietary_goal,
+                    u.other_goal = $other_goal,
+                    u.calorie_preference = $calorie_preference
+                RETURN u
+            """, {
+                "email": user_email,
+                "has_allergies": data.get('has_allergies'),
+                "allergies": allergies,
+                "diet": data.get('diet'),
+                "other_diet": data.get('other_diet'),
+                "meal_time": data.get('meal_time'),
+                "cuisines": cuisines,
+                "food_types": food_types,
+                "spice_preference": data.get('spice_preference'),
+                "sweetness_preference": data.get('sweetness_preference'),
+                "disliked_foods": [f.strip() for f in data.get('disliked_foods', '').split(',') if f.strip()],
+                "prep_time": data.get('prep_time'),
+                "drinks": drinks,
+                "dietary_goal": data.get('dietary_goal'),
+                "other_goal": data.get('other_goal'),
+                "calorie_preference": data.get('calorie_preference')
+            })
+            
+            if result.single():
+                return jsonify({"message": "Preferences updated successfully"}), 200
+            return jsonify({"error": "User not found"}), 404
+
+    except Exception as e:
+        print(f"Error updating user preferences: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_recipes/added')
+def get_added_recipes():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Debug print
+            print(f"Fetching added recipes for user: {user_email}")
+            
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:ADDED_RECIPE]->(r:Recipe)
+                OPTIONAL MATCH (r)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(DISTINCT i.name) as ingredients
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    ingredients
+            """, {"email": user_email})
+            
+            recipes = [dict(record) for record in result]
+            print(f"Found {len(recipes)} added recipes")  # Debug print
+            return jsonify(recipes), 200
+
+    except Exception as e:
+        print(f"Error getting added recipes: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_fridge_ingredient', methods=['POST'])
+def add_fridge_ingredient():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        category = data.get('category')
+        name = data.get('name')
+        amount = data.get('amount')
+        unit = data.get('unit')
+        expiry_date = data.get('expiry_date')
+
+        print("Received data:", data)  # Debug log
+
+        if not all([user_email, category, name, amount, unit, expiry_date]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        with driver.session() as session:
+            # Create new ingredient with explicit property types
+            ingredient_id = str(uuid.uuid4())
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                CREATE (f:FridgeItem {
+                    id: $id,
+                    ingredient: $name,
+                    category: $category,
+                    amount: toFloat($amount),
+                    unit: $unit,
+                    expiry_date: $expiry_date
+                })
+                CREATE (u)-[:HAS_IN_FRIDGE]->(f)
+                RETURN 
+                    f.id as id,
+                    f.ingredient as ingredient,
+                    f.category as category,
+                    f.amount as amount,
+                    f.unit as unit,
+                    f.expiry_date as expiry_date
+            """, {
+                "email": user_email,
+                "id": ingredient_id,
+                "name": name,
+                "category": category,
+                "amount": amount,
+                "unit": unit,
+                "expiry_date": expiry_date
+            })
+
+            created = result.single()
+            if created:
+                print("Created item:", dict(created))  # Debug log
+                return jsonify(dict(created)), 200
+            return jsonify({"error": "Failed to add ingredient"}), 500
+
+    except Exception as e:
+        print(f"Error adding ingredient to fridge: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_fridge_items')
+def get_fridge_items():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Modified query to ensure all fields are properly returned
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_FRIDGE]->(f:FridgeItem)
+                RETURN 
+                    f.id as id,
+                    f.ingredient as ingredient,
+                    f.category as category,
+                    f.amount as amount,
+                    f.unit as unit,
+                    f.expiry_date as expiry_date
+                ORDER BY f.expiry_date
+            """, {"email": user_email})
+            
+            # Process each record to ensure proper data types and no null values
+            items = []
+            for record in result:
+                item = {
+                    'id': str(record['id']),
+                    'ingredient': str(record['ingredient']),
+                    'category': str(record['category']),
+                    'amount': float(record['amount']) if record['amount'] is not None else 0.0,
+                    'unit': str(record['unit']),
+                    'expiry_date': str(record['expiry_date'])
+                }
+                items.append(item)
+            
+            print("Retrieved items:", items)  # Debug log
+            return jsonify(items), 200
+
+    except Exception as e:
+        print(f"Error getting fridge items: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_fridge_item', methods=['POST'])
+def add_fridge_item():
+    try:
+        data = request.json
+        user_email = request.args.get('user_email')
+        
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                CREATE (i:FridgeItem {
+                    id: randomUUID(),
+                    name: $name,
+                    category: $category,
+                    quantity: $quantity,
+                    unit: $unit,
+                    expiry_date: $expiry_date
+                })
+                CREATE (u)-[:HAS_ITEM]->(i)
+                RETURN i
+            """, {
+                "email": user_email,
+                "name": data['name'],
+                "category": data['category'],
+                "quantity": float(data['quantity']),
+                "unit": data['unit'],
+                "expiry_date": data['expiry_date']
+            })
+            
+            if result.single():
+                return jsonify({"message": "Item added successfully"}), 200
+            return jsonify({"error": "Failed to add item"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/remove_fridge_item/<item_id>', methods=['DELETE'])
+def remove_fridge_item(item_id):
+    try:
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (i:FridgeItem {id: $id})
+                DETACH DELETE i
+                RETURN count(i) as deleted
+            """, {"id": item_id})
+            
+            if result.single()['deleted'] > 0:
+                return jsonify({"message": "Item removed successfully"}), 200
+            return jsonify({"error": "Item not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Add this new route after your other routes
+@app.route('/search_recipes_by_ingredient')
+def search_recipes_by_ingredient():
+    try:
+        ingredient = request.args.get('ingredient', '').lower()
+        
+        with driver.session() as session:
+            query = """
+            MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
+            WHERE toLower(i.name) CONTAINS $ingredient
             WITH r, collect(i.name) as ingredients
             RETURN 
-                r.recipe_id as id,
+                r.recipe_id as recipe_id,
                 r.name as name,
                 r.instructions as instructions,
                 r.calories as calories,
@@ -501,13 +1067,560 @@ def get_user_recipes(type):
                 r.cuisine as cuisine,
                 r.image_path as image_path,
                 ingredients
+            ORDER BY r.name
             """
             
-            result = session.run(query, {"email": user_email})
+            result = session.run(query, {
+                "ingredient": ingredient
+            })
+            
+            recipes = [dict(record) for record in result]
+            return jsonify(recipes), 200
+            
+    except Exception as e:
+        print(f"Error searching recipes by ingredient: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# Add these routes after your existing routes
+
+@app.route('/add_to_fridge', methods=['POST'])
+def add_to_fridge():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        ingredient = data.get('ingredient')
+        expiry_date = data.get('expiry_date')
+
+        print(f"Adding to fridge: {user_email}, {ingredient}, {expiry_date}")  # Debug log
+
+        if not all([user_email, ingredient, expiry_date]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                CREATE (f:FridgeItem {
+                    id: toString(timestamp()),
+                    ingredient: $ingredient,
+                    expiry_date: $expiry_date,
+                    added_date: datetime()
+                })
+                CREATE (u)-[:HAS_IN_FRIDGE]->(f)
+                RETURN 
+                    f.id as id, 
+                    f.ingredient as ingredient, 
+                    toString(f.expiry_date) as expiry_date,
+                    toString(f.added_date) as added_date
+            """, {
+                "email": user_email,
+                "ingredient": ingredient,
+                "expiry_date": expiry_date
+            })
+
+            created_item = result.single()
+            if created_item:
+                return jsonify({
+                    "message": "Ingredient added to fridge successfully",
+                    "item": dict(created_item)
+                }), 200
+            return jsonify({"error": "Failed to add ingredient"}), 500
+
+    except Exception as e:
+        print(f"Error adding to fridge: {str(e)}")  # Debug log
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_user_fridge')
+def get_user_fridge():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        print(f"Getting fridge items for: {user_email}")  # Debug log
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_FRIDGE]->(f:FridgeItem)
+                RETURN 
+                    f.id as id,
+                    f.ingredient as ingredient,
+                    toString(f.expiry_date) as expiry_date,
+                    toString(f.added_date) as added_date
+                ORDER BY f.expiry_date
+            """, {"email": user_email})
+            
+            items = [dict(record) for record in result]
+            print(f"Found {len(items)} items in fridge")  # Debug log
+            return jsonify(items), 200
+
+    except Exception as e:
+        print(f"Error getting fridge items: {str(e)}")  # Debug log
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/remove_from_fridge/<item_id>', methods=['DELETE'])
+def remove_from_fridge(item_id):
+    try:
+        user_email = request.json.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Verify the item belongs to the user before deleting
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_FRIDGE]->(f:FridgeItem {id: $item_id})
+                DETACH DELETE f
+                RETURN count(f) as deleted
+            """, {
+                "email": user_email,
+                "item_id": item_id
+            })
+            
+            if result.single()['deleted'] > 0:
+                return jsonify({"message": "Item removed successfully"}), 200
+            return jsonify({"error": "Item not found or unauthorized"}), 404
+
+    except Exception as e:
+        print(f"Error removing from fridge: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_to_shopping_list', methods=['POST'])
+def add_to_shopping_list():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        item = data.get('item')
+
+        if not all([user_email, item]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                CREATE (s:ShoppingItem {
+                    id: randomUUID(),
+                    name: $item,
+                    added_date: datetime(),
+                    checked: false
+                })
+                CREATE (u)-[:HAS_IN_SHOPPING_LIST]->(s)
+                RETURN s
+            """, {
+                "email": user_email,
+                "item": item
+            })
+
+            if result.single():
+                return jsonify({"message": "Item added to shopping list"}), 200
+            return jsonify({"error": "Failed to add item"}), 500
+
+    except Exception as e:
+        print(f"Error adding to shopping list: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_shopping_list')
+def get_shopping_list():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_SHOPPING_LIST]->(s:ShoppingItem)
+                RETURN s.id as id,
+                       s.name as name,
+                       s.checked as checked,
+                       s.added_date as added_date
+                ORDER BY s.added_date DESC
+            """, {"email": user_email})
+            
+            items = [dict(record) for record in result]
+            return jsonify(items), 200
+
+    except Exception as e:
+        print(f"Error getting shopping list: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_shopping_item/<item_id>', methods=['PUT'])
+def update_shopping_item(item_id):
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        checked = data.get('checked', False)
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_SHOPPING_LIST]->(s:ShoppingItem {id: $item_id})
+                SET s.checked = $checked
+                RETURN s
+            """, {
+                "email": user_email,
+                "item_id": item_id,
+                "checked": checked
+            })
+
+            if result.single():
+                return jsonify({"message": "Item updated successfully"}), 200
+            return jsonify({"error": "Item not found or unauthorized"}), 404
+
+    except Exception as e:
+        print(f"Error updating shopping item: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/remove_from_shopping_list/<item_id>', methods=['DELETE'])
+def remove_from_shopping_list(item_id):
+    try:
+        user_email = request.json.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_IN_SHOPPING_LIST]->(s:ShoppingItem {id: $item_id})
+                DETACH DELETE s
+                RETURN count(s) as deleted
+            """, {
+                "email": user_email,
+                "item_id": item_id
+            })
+            
+            if result.single()['deleted'] > 0:
+                return jsonify({"message": "Item removed successfully"}), 200
+            return jsonify({"error": "Item not found or unauthorized"}), 404
+
+    except Exception as e:
+        print(f"Error removing from shopping list: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_recipes_from_fridge')
+def get_recipes_from_fridge():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Updated query to exclude expired ingredients
+            result = session.run("""
+                // First get all non-expired ingredients from user's fridge
+                MATCH (u:User {email: $email})-[:HAS_IN_FRIDGE]->(f:FridgeItem)
+                WHERE datetime(f.expiry_date) > datetime()  // Only include non-expired items
+                WITH collect(toLower(f.ingredient)) as fridge_ingredients
+                
+                // Then find recipes that contain these ingredients
+                MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
+                WITH r, fridge_ingredients, 
+                     collect(toLower(i.name)) as recipe_ingredients,
+                     size(collect(i.name)) as total_ingredients
+                
+                // Calculate how many ingredients from the recipe are in the fridge
+                WITH r, 
+                     size([x IN recipe_ingredients WHERE x IN fridge_ingredients]) as matching_ingredients,
+                     total_ingredients,
+                     recipe_ingredients
+                
+                // Calculate match percentage and only return recipes with at least one matching ingredient
+                WHERE matching_ingredients > 0
+                
+                // Get all ingredients for these recipes
+                MATCH (r)-[:CONTAINS]->(all_i:Ingredient)
+                WITH r, 
+                     matching_ingredients,
+                     total_ingredients,
+                     collect(DISTINCT all_i.name) as all_ingredients,
+                     (toFloat(matching_ingredients) / total_ingredients * 100) as match_percentage
+                
+                // Return recipe details with match information
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    all_ingredients as ingredients,
+                    matching_ingredients,
+                    total_ingredients,
+                    match_percentage
+                ORDER BY match_percentage DESC
+                LIMIT 10
+            """, {"email": user_email})
+            
             recipes = [dict(record) for record in result]
             return jsonify(recipes), 200
 
     except Exception as e:
+        print(f"Error getting recipe recommendations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_recipe/<recipe_id>')
+def get_recipe(recipe_id):
+    try:
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                OPTIONAL MATCH (r)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(DISTINCT i.name) as ingredients
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    ingredients
+            """, {"recipe_id": recipe_id})
+            
+            record = result.single()
+            if record:
+                return jsonify(dict(record)), 200
+            return jsonify({"error": "Recipe not found"}), 404
+
+    except Exception as e:
+        print(f"Error getting recipe details: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_recipe_recommendations')
+def get_recipe_recommendations():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # Get user preferences
+            user_prefs = session.run("""
+                MATCH (u:User {email: $email})
+                RETURN u
+            """, {"email": user_email}).single()
+
+            if not user_prefs:
+                return jsonify({"error": "User not found"}), 404
+
+            # Build query based on user preferences
+            query = """
+                MATCH (r:Recipe)-[:CONTAINS]->(i:Ingredient)
+                WITH r, collect(DISTINCT i.name) as ingredients
+                WHERE 
+                    // Filter by diet if specified
+                    (NOT exists(r.diet) OR r.diet = $diet)
+                    // Filter by calorie preference
+                    AND (NOT exists(r.calories) OR 
+                        CASE $calorie_preference
+                            WHEN 'low' THEN r.calories <= 200
+                            WHEN 'medium' THEN r.calories > 200 AND r.calories <= 500
+                            WHEN 'high' THEN r.calories > 500
+                            ELSE true
+                        END)
+                    // Filter out recipes with disliked ingredients
+                    AND NONE(x IN $disliked_foods WHERE toLower(r.name) CONTAINS toLower(x))
+                    AND NONE(x IN $disliked_foods WHERE any(ing IN ingredients WHERE toLower(ing) CONTAINS toLower(x)))
+                RETURN 
+                    r.recipe_id as recipe_id,
+                    r.name as name,
+                    r.instructions as instructions,
+                    r.image_path as image_path,
+                    r.cuisine as cuisine,
+                    r.difficulty as difficulty,
+                    r.time as time,
+                    r.calories as calories,
+                    ingredients,
+                    // Calculate match percentage based on preferences
+                    CASE
+                        WHEN r.cuisine IN $preferred_cuisines THEN 20
+                        ELSE 0
+                    END +
+                    CASE
+                        WHEN r.difficulty = $skill_level THEN 15
+                        ELSE 0
+                    END +
+                    CASE
+                        WHEN r.time <= toInteger($prep_time) THEN 15
+                        ELSE 0
+                    END as match_percentage
+                ORDER BY match_percentage DESC
+                LIMIT 10
+            """
+
+            # Get user preferences from the database
+            user = user_prefs['u']
+            
+            # Process disliked foods
+            disliked_foods = []
+            if user.get('disliked_foods'):
+                disliked_foods = [food.strip().lower() for food in user['disliked_foods']]
+
+            # Execute recommendation query
+            result = session.run(query, {
+                "email": user_email,
+                "diet": user.get('diet'),
+                "calorie_preference": user.get('calorie_preference'),
+                "preferred_cuisines": user.get('cuisines', []),
+                "skill_level": user.get('cooking_skill'),
+                "prep_time": user.get('preferred_cooking_time', 60),
+                "disliked_foods": disliked_foods
+            })
+
+            recipes = [dict(record) for record in result]
+            return jsonify(recipes), 200
+
+    except Exception as e:
+        print(f"Error getting recipe recommendations: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/add_to_recipe_list', methods=['POST'])
+def add_to_recipe_list():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        recipe_id = data.get('recipe_id')
+        list_type = data.get('list_type')
+
+        if not all([user_email, recipe_id, list_type]):
+            return jsonify({"error": "Missing required parameters"}), 400
+
+        # Map list_type to relationship type
+        relationship_types = {
+            'liked': 'LIKES',
+            'cooked': 'COOKED',
+            'want_to_try': 'WANTS_TO_TRY'
+        }
+
+        relationship_type = relationship_types.get(list_type)
+        if not relationship_type:
+            return jsonify({"error": "Invalid list type"}), 400
+
+        with driver.session() as session:
+            # Create relationship between user and recipe
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                MATCH (r:Recipe {recipe_id: $recipe_id})
+                MERGE (u)-[rel:${relationship_type}]->(r)
+                RETURN rel
+            """, {
+                "email": user_email,
+                "recipe_id": recipe_id
+            })
+
+            if result.single():
+                return jsonify({"message": f"Recipe added to {list_type} list successfully"}), 200
+            return jsonify({"error": "Failed to add recipe to list"}), 500
+
+    except Exception as e:
+        print(f"Error adding recipe to list: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/save_survey', methods=['POST'])
+def save_survey():
+    try:
+        data = request.json
+        user_email = data.get('user_email')
+        survey_data = data.get('survey_data')
+
+        print("Received survey data:", data)  # Debug log
+
+        if not user_email or not survey_data:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        with driver.session() as session:
+            # First, remove any existing survey data
+            session.run("""
+                MATCH (u:User {email: $email})-[r:HAS_SURVEY]->(s:Survey)
+                DELETE r, s
+            """, {"email": user_email})
+
+            # Create new survey node with all fields
+            result = session.run("""
+                MATCH (u:User {email: $email})
+                CREATE (s:Survey {
+                    dietaryRestrictions: $dietaryRestrictions,
+                    cuisinePreferences: $cuisinePreferences,
+                    cookingSkill: $cookingSkill,
+                    cookingFrequency: $cookingFrequency,
+                    mealPreferences: $mealPreferences
+                })
+                CREATE (u)-[:HAS_SURVEY]->(s)
+                RETURN s
+            """, {
+                "email": user_email,
+                "dietaryRestrictions": survey_data['dietaryRestrictions'],
+                "cuisinePreferences": survey_data['cuisinePreferences'],
+                "cookingSkill": survey_data['cookingSkill'],
+                "cookingFrequency": survey_data['cookingFrequency'],
+                "mealPreferences": survey_data['mealPreferences']
+            })
+
+            record = result.single()
+            if record:
+                return jsonify({"message": "Survey data saved successfully", "data": dict(record['s'])}), 200
+            return jsonify({"error": "Failed to save survey data"}), 500
+
+    except Exception as e:
+        print(f"Error saving survey data: {str(e)}")  # Debug log
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_survey', methods=['GET'])
+def get_survey():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_SURVEY]->(s:Survey)
+                RETURN s
+            """, {"email": user_email})
+            
+            record = result.single()
+            if record:
+                return jsonify(dict(record['s'])), 200
+            return jsonify({"message": "No survey data found"}), 404
+
+    except Exception as e:
+        print(f"Error getting survey data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get_recommended_recipes', methods=['GET'])
+def get_recommended_recipes():
+    try:
+        user_email = request.args.get('user_email')
+        if not user_email:
+            return jsonify({"error": "User email is required"}), 400
+
+        with driver.session() as session:
+            # First get user preferences
+            result = session.run("""
+                MATCH (u:User {email: $email})-[:HAS_SURVEY]->(s:Survey)
+                RETURN s
+            """, {"email": user_email})
+            
+            preferences = result.single()
+            if not preferences:
+                return jsonify({"error": "No preferences found"}), 404
+
+            # Get recipes matching user preferences
+            recipes = session.run("""
+                MATCH (r:Recipe)
+                WHERE 
+                    ANY(cuisine IN $cuisines WHERE cuisine IN r.cuisineType)
+                    AND NOT ANY(restriction IN $restrictions WHERE restriction IN r.allergens)
+                RETURN r
+                LIMIT 10
+            """, {
+                "cuisines": preferences['s']['cuisinePreferences'],
+                "restrictions": preferences['s']['dietaryRestrictions']
+            })
+
+            recommended_recipes = [dict(record['r']) for record in recipes]
+            return jsonify({"recipes": recommended_recipes}), 200
+
+    except Exception as e:
+        print(f"Error getting recommended recipes: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

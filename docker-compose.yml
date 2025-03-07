@@ -11,12 +11,16 @@ services:
       - NEO4J_PASSWORD=testpassword
       - CLEAN_DB=false  # Set to true if you want to clean the DB on startup
       - SPOONACULAR_API_KEY=71e0ef0aa4c24ccc8cd0bec39181c81f
+      - MAIL_SERVER=smtp.gmail.com
+      - MAIL_PORT=587
+      - MAIL_USE_TLS=True
+      - MAIL_USERNAME=your-email@gmail.com
+      - MAIL_PASSWORD=your-app-password
     depends_on:
       - neo4j
     volumes:
       - .:/app
       - ./static:/app/static
-      - ./static/recipe_images:/app/static/recipe_images
     networks:
       - app-network
 
@@ -40,6 +44,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  init-db:
+    image: alpine/curl
+    depends_on:
+      - web
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        for i in 1 2 3 4 5; do
+          echo "Attempt $i to import recipes...";
+          sleep 10;
+          curl --location 'http://web:5000/import_recipes' --header 'Content-Type: application/json' --data '{"limit": 50}' && break;
+        done
+    networks:
+      - app-network
 
 volumes:
   neo4j_data:

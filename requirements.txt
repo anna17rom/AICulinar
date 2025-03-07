@@ -5,3 +5,5 @@ neo4j
 requests
 cloudinary
 werkzeug
+tensorflow
+Pillow
